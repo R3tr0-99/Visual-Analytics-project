@@ -1,4 +1,3 @@
-// barChart.jsx
 import React, { Fragment, useEffect, useRef, useState } from 'react';
 import { select } from 'd3-selection';
 import { scaleBand, scaleLinear } from 'd3-scale';
@@ -8,65 +7,73 @@ import { Typography } from '@mui/material';
 export default function BarChart(props) {
     const ref = useRef(null);
 
-    const size = 600;
-    const margin = { top: 20, right: 10, bottom: 80, left: 40 };
-    const innerWidth = size - margin.left - margin.right;   // 600 - 40 - 10 = 550
-    const innerHeight = size - margin.top - margin.bottom;  // 600 - 20 - 80 = 500
+    // Imposta larghezza e altezza indipendenti
+    const width = 600;   // <-- Modifica qui la larghezza desiderata
+    const height = 400;  // <-- Altezza fissa
 
- 
+    const margin = { top: 20, right: 10, bottom: 80, left: 60 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
     const levels = 5;
     const maxValue = 1;
 
-       const [lastHoveredNode, setLastHoveredNode] = useState(null);
+    const [lastHoveredNode, setLastHoveredNode] = useState(null);
     const [lastLabels, setLastLabels] = useState([]);
     const [keyNode, setKeyNode] = useState("");
 
-
+    // Aggiorna il nodo al passaggio del mouse
     useEffect(() => {
         if (props.hoveredNode) {
-            
             const key = Object.keys(props.hoveredNode.attributes)[0];
             setKeyNode(key);
-            setLastHoveredNode(props.hoveredNode)
+            setLastHoveredNode(props.hoveredNode);
         }
-    }, [props.hoveredNode])
+    }, [props.hoveredNode]);
+
+    // Aggiorna le labels/features
     useEffect(() => {
         if (props.features) {
-            setLastLabels(props.features)
+            setLastLabels(props.features);
         }
-    }, [props.features])
+    }, [props.features]);
+
+    // Disegna il grafico
     useEffect(() => {
-        if (!ref.current || !lastLabels?.length) return;
+        if (!ref.current || !lastLabels.length) return;
 
         const svg = select(ref.current);
         svg.selectAll('*').remove();
-
         svg
-            .attr('viewBox', `0 0 ${size} ${size}`)
+            .attr('viewBox', `0 0 ${width} ${height}`)
             .attr('preserveAspectRatio', 'xMidYMid meet');
 
         const g = svg
             .append('g')
             .attr('transform', `translate(${margin.left}, ${margin.top})`);
 
+        // scale X
         const xScale = scaleBand()
             .domain(lastLabels)
             .range([0, innerWidth])
             .padding(0.2);
 
+        // scale Y da 0 a 1
         const yScale = scaleLinear()
             .domain([0, maxValue])
             .range([innerHeight, 0]);
 
+        // asse Y con percentuali
         g.append('g')
             .call(
                 axisLeft(yScale)
                     .ticks(levels)
-                    .tickFormat((d) => d.toFixed(2))
+                    .tickFormat(d => `${(d * 100).toFixed(0)}%`)
             )
             .selectAll('text')
             .style('font-size', '11px');
 
+        // linee di griglia orizzontali
         for (let i = 1; i <= levels; i++) {
             const yVal = (innerHeight / levels) * i;
             g.append('line')
@@ -79,6 +86,7 @@ export default function BarChart(props) {
                 .style('stroke-opacity', 0.3);
         }
 
+        // asse X
         g.append('g')
             .attr('transform', `translate(0, ${innerHeight})`)
             .call(axisBottom(xScale).tickSize(0))
@@ -89,11 +97,12 @@ export default function BarChart(props) {
             .attr('dy', '0.2em')
             .style('font-size', '11px');
 
+        // barre
         const node = lastHoveredNode;
         if (node?.dimensions) {
-            const data =lastLabels.map((feat) => ({
+            const data = lastLabels.map(feat => ({
                 feature: feat,
-                value: node.dimensions[feat] ?? 0,
+                value: node.dimensions[feat] ?? 0
             }));
 
             g.selectAll('.bar')
@@ -101,26 +110,22 @@ export default function BarChart(props) {
                 .enter()
                 .append('rect')
                 .attr('class', 'bar')
-                .attr('x', (d) => xScale(d.feature))
-                .attr('y', (d) => yScale(d.value))
+                .attr('x', d => xScale(d.feature))
+                .attr('y', d => yScale(d.value))
                 .attr('width', xScale.bandwidth())
-                .attr('height', (d) => innerHeight - yScale(d.value))
+                .attr('height', d => innerHeight - yScale(d.value))
                 .style('fill', 'orange');
         }
-    }, [lastHoveredNode, lastLabels]);
+    }, [lastHoveredNode, lastLabels, width, height]);
 
     return (
         <Fragment>
             {lastHoveredNode && (
-                <Typography>
+                <Typography sx={{ mb: 1 }}>
                     Regione selezionata: <b>{lastHoveredNode.attributes[keyNode]}</b>
                 </Typography>
             )}
-            <svg
-                ref={ref}
-                width="100%"
-                height={size}
-            ></svg>
+            <svg ref={ref} width="100%" height={height}></svg>
         </Fragment>
     );
 }

@@ -1,5 +1,6 @@
-import { Button, Grid, List, ListItem, ListItemText, Typography } from "@mui/material";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Button } from "@mui/material";
+import { useEffect, useRef, useState } from "react";
+import { minEffectivenessErrorHeuristic, minEffectivenessErrorHeuristicFast } from "../utils/arrangement";
 
 export default function RadvizChart(props) {
     const containerRef = useRef(null);
@@ -7,17 +8,13 @@ export default function RadvizChart(props) {
 
     const [selectedNodes, setSelectedNodes] = useState([]);
     const [nodeHovered, setNodeHovered] = useState(null);
-    const [lastHoveredNode, setLastHoveredNode] = useState(null);
-
     const [valoreRaggio, setValoreRaggio] = useState(0);
     const [type, setType] = useState("original");
-    const [keyNode, setKeyNode] = useState("");
 
 
     useEffect(() => {
-
         if (props.data !== undefined && props.data.length > 0) {
-
+            console.log(props.data)
             const chart = d3.radviz().data(props.data)
             chart.disableDraggableAnchors(false);
             chartRef.current = chart;
@@ -56,11 +53,6 @@ export default function RadvizChart(props) {
             chart.setFunctionMouseOver((_, event) => {
                 const nodeData = event.target.__data__;
                 setNodeHovered(nodeData);
-                if (nodeData) {
-                      const key = Object.keys(nodeData.attributes)[0];
-            setKeyNode(key);
-                    setLastHoveredNode(nodeData);
-                }
             });
 
             chart.setFunctionMouseOut(() => {
@@ -79,6 +71,9 @@ export default function RadvizChart(props) {
         }
     }, [props.data]);
 
+    useEffect(() => {
+        if (type) props.changeType(type);
+    }, [type])
 
     useEffect(() => {
         if (props.nodeSelectedChanged) {
@@ -113,7 +108,6 @@ export default function RadvizChart(props) {
 
         }
     }, [nodeHovered])
-
     function increaseRaggio() {
         if (chartRef.current && valoreRaggio < 5) {
             chartRef.current.increaseRadius();
@@ -156,9 +150,15 @@ export default function RadvizChart(props) {
         chartRef.current?.updateRadviz();
     }
 
+
+
+
+
     return (
-        <Grid container sx={{ display: "flex", alignItems: "center", flexWrap: 'wrap', p: 2 }}>
-            <Grid size={4} sx={{ display: "flex", flexDirection: 'column', flexWrap: "wrap", gap: "8px" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexWrap: 'wrap' }}>
+            <div style={{ width: 400, height: 400 }} ref={containerRef}></div>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
 
                 <Button disabled={valoreRaggio >= 5} variant="outlined" onClick={increaseRaggio}>
                     Raggio +
@@ -174,36 +174,44 @@ export default function RadvizChart(props) {
                 </Button>
 
                 <Button
+                    disabled={type === "eemh"}
+                    variant="outlined"
+                    onClick={() => {
+                        setType("eemh");
+                        d3.selectAll(".data_point").remove();
+                        d3.selectAll(".AP_points").remove();
+                        d3.selectAll(".attr_label").remove();
+                        d3.selectAll(".legend").remove();
+                        d3.selectAll(".radarlevel").remove();
+                        d3.selectAll(".grid")
+                        const data = chartRef.current?.data();
+                        if (data) {
+                            setSelectedNodes([]);
+                            const updated = minEffectivenessErrorHeuristic(data);
+                            chartRef.current.updateRadviz(updated);
+                        }
+                    }}
+                >
+                    EEMH Heuristic
+                </Button>
+
+
+                <Button
+                
                     disabled={type === "original" && selectedNodes.length === 0}
-                    variant="text"
+                    variant="outlined"
                     onClick={resetSelectedNodes}
                 >
                     Reset
                 </Button>
-                {lastHoveredNode && (
-                    <Typography align="start">Ultima regione (in hover): <b>{lastHoveredNode.attributes[keyNode]}</b></Typography>
-                )}
-                                        <Typography  align="start">Regioni selezionate:</Typography>
 
-                {(selectedNodes && selectedNodes.length > 0 && keyNode) ? (
-                    <Fragment>
-                        <ul>
-                            {selectedNodes.map((nodo, index) => (
-                                <li key={index}>
-                                    <Typography align="start">{nodo.attributes[keyNode]}</Typography>
-                                </li>
-                            ))}
-                        </ul>
-                    </Fragment>
-                ): (
-                    <Typography><b>Nessuna</b></Typography>
-                )}
-            </Grid>
-            <Grid size={8}>
-                <div style={{ width: 600, height: 600 }} ref={containerRef}></div>
-            </Grid>
+            </div>
 
-        </Grid>
+            <div>
+
+
+            </div>
+        </div>
     );
 };
 

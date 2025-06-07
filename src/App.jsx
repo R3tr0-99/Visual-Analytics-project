@@ -1,4 +1,3 @@
-// src/App.jsx
 import { useEffect, useState } from 'react';
 import * as d3 from 'd3';
 import './App.css';
@@ -9,6 +8,7 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Box,
 } from '@mui/material';
 import RadvizChart from './components/radvizChart';
 import RadarChart from './components/radarChart';
@@ -17,14 +17,15 @@ import BarChart from './components/barChart';
 
 function App() {
   // Stati React
-  const [fileList, setFileList] = useState([]);        // ["partiti.csv", "voti_regioni.csv", ...]
-  const [selectedFile, setSelectedFile] = useState(''); // es. "partiti.csv"
+  const [fileList, setFileList] = useState([]);
+  const [selectedFile, setSelectedFile] = useState('');
   const [csvData, setCsvData] = useState([]);
   const [features, setFeatures] = useState([]);
   const [selectedNodes, setSelectedNodes] = useState([]);
   const [hoveredNode, setHoveredNode] = useState(null);
+  const [type, setType] = useState("original");
 
-  // 1. All’avvio, carico public/data/files.json per ottenere l’elenco dei .csv
+  // Carica lista file CSV
   useEffect(() => {
     fetch('/data/files.json')
       .then((res) => {
@@ -32,17 +33,14 @@ function App() {
         return res.json();
       })
       .then((lista) => {
-        // lista es. ["partiti.csv", "voti_regioni.csv", "candidates.csv"]
         setFileList(lista);
-        // (opzionale) se vuoi pre-selezionare il primo:
-        // if (lista.length > 0) setSelectedFile(lista[0]);
       })
       .catch((err) => {
         console.error(err);
       });
   }, []);
 
-  // 2. Ogni volta che cambia selectedFile (es. "partiti.csv"), carico il CSV via d3.csv
+  // Carica dati CSV selezionato
   useEffect(() => {
     if (!selectedFile) {
       setCsvData([]);
@@ -50,27 +48,21 @@ function App() {
       return;
     }
 
-    const url = `/data/${selectedFile}`; // es. "/data/partiti.csv"
+    const url = `/data/${selectedFile}`;
     d3.csv(url)
       .then((rawData) => {
-        // Filtra eventuali righe con campi nulli o stringhe vuote
         const filtered = rawData.filter((d) =>
           Object.values(d).every((v) => v !== null && v !== '')
         );
-
-        // Converte le stringhe numeriche in veri Number
         const parsed = filtered.map((row) => {
           const copy = { ...row };
           for (const k in copy) {
             const num = +copy[k];
-            if (!isNaN(num)) copy[k] = num; // se era stringa-numerica, la trasformo
+            if (!isNaN(num)) copy[k] = num;
           }
           return copy;
         });
-
         setCsvData(parsed);
-
-        // Trovo tutte le colonne che adesso sono typeof number
         if (parsed.length > 0) {
           const firstRow = parsed[0];
           const numericKeys = Object.keys(firstRow).filter(
@@ -94,14 +86,17 @@ function App() {
   function hoveredNodeChanged(node) {
     setHoveredNode(node);
   }
+  function changeType(typeTmp) {
+    setType(typeTmp)
+  }
 
+  // Layout: due colonne, sinistra larga (8/12), destra stretta (4/12), ogni colonna con due box impilati
   return (
     <>
       <Typography variant="h3" gutterBottom>
         Dashboard Visual-Analytics
       </Typography>
 
-      {/* === SELECT per scegliere quale CSV caricare === */}
       <FormControl sx={{ minWidth: 240, mb: 2 }}>
         <InputLabel id="select-csv-label">Scegli CSV</InputLabel>
         <Select
@@ -125,35 +120,72 @@ function App() {
         </Typography>
       ) : (
         <>
-          {/* Se non ho colonne numeriche, mostro l’errore */}
           {features.length === 0 ? (
             <Typography color="error">
               Errore: il file CSV selezionato non contiene colonne numeriche.
             </Typography>
           ) : (
-            <Grid container spacing={2}>
-              <Grid item xs={12} sx={{ border: '1px solid black', p: 1 }}>
-                <RadvizChart
-                  data={csvData}
-                  hoveredNodeChanged={hoveredNodeChanged}
-                  nodeSelectedChanged={nodeSelectedChanged}
-                />
+            <Grid container spacing={2} sx={{ height: 'calc(100vh - 180px)' }}>
+              {/* Colonna sinistra: RADVIZ sopra, BARCHART sotto */}
+              <Grid item xs={8} sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <Box sx={{ flex: 1, minHeight: 0, mb: 2, border: '1px solid #bbb', borderRadius: 2, p: 1, background: '#fff' }}>
+                  <RadvizChart
+                    changeType={changeType}
+                    data={csvData}
+                    hoveredNodeChanged={hoveredNodeChanged}
+                    nodeSelectedChanged={nodeSelectedChanged}
+                  />
+                </Box>
+                <Box sx={{ flex: 1, minHeight: 0, border: '1px solid #bbb', borderRadius: 2, p: 1, background: '#fff' }}>
+                  <BarChart hoveredNode={hoveredNode} features={features} />
+                </Box>
               </Grid>
-              <Grid item xs={6} sx={{ border: '1px solid black', p: 1 }}>
-                <BarChart hoveredNode={hoveredNode} features={features} />
-              </Grid>
-              <Grid item xs={6} sx={{ border: '1px solid black', p: 1 }}>
-                <RadarNoVectorChart
-                  hoveredNode={hoveredNode}
-                  features={features}
-                />
-              </Grid>
-              <Grid item xs={12} sx={{ border: '1px solid black', p: 1 }}>
-                <RadarChart
-                  data={selectedNodes}
-                  features={features}
-                  selectedNodesFromRadviz={selectedNodes}
-                />
+              {/* Colonna destra: RadarNoVectorChart sopra, RadarChart sotto */}
+              <Grid item xs={4} sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <Box sx={{
+                  flex: 1,
+                  minHeight: 0,
+                  mb: 2,
+                  border: '1px solid #bbb',
+                  borderRadius: 2,
+                  p: 1,
+                  background: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  // Mantieni quadrato
+                  aspectRatio: '1 / 1',
+                  maxHeight: '50%',
+                }}>
+                  <RadarNoVectorChart
+                    type={type}
+                    csvData={csvData}
+                    hoveredNode={hoveredNode}
+                    features={features}
+                  />
+                </Box>
+                <Box sx={{
+                  flex: 1,
+                  minHeight: 0,
+                  border: '1px solid #bbb',
+                  borderRadius: 2,
+                  p: 1,
+                  background: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  // Mantieni quadrato
+                  aspectRatio: '1 / 1',
+                  maxHeight: '50%',
+                }}>
+                  <RadarChart
+                    type={type}
+                    csvData={csvData}
+                    data={selectedNodes}
+                    features={features}
+                    selectedNodesFromRadviz={selectedNodes}
+                  />
+                </Box>
               </Grid>
             </Grid>
           )}
