@@ -158,7 +158,7 @@ export default function RadvizChart(props) {
 
     return (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexWrap: 'wrap' }}>
-            <div className="visualization" style={{ width: 400, height: 400 }}>
+            <div className="visualization" style={{ width: 500, height: 500 }}>
                 <div id="container">
                     <div ref={containerRef}>
                     </div>
