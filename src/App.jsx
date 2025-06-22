@@ -127,7 +127,7 @@ function App() {
           ) : (
             <Grid container spacing={2} sx={{ height: 'calc(100vh - 180px)' }}>
               {/* Colonna sinistra: RADVIZ sopra, BARCHART sotto */}
-              <Grid item xs={8} sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <Grid size={8} sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <Box sx={{ flex: 1, minHeight: 0, mb: 2, border: '1px solid #bbb', borderRadius: 2, p: 1, background: '#fff' }}>
                   <RadvizChart
                     changeType={changeType}
@@ -141,7 +141,7 @@ function App() {
                 </Box>
               </Grid>
               {/* Colonna destra: RadarNoVectorChart sopra, RadarChart sotto */}
-              <Grid item xs={4} sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <Grid size={4} sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 <Box sx={{
                   flex: 1,
                   minHeight: 0,

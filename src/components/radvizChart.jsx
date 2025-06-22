@@ -14,9 +14,7 @@ export default function RadvizChart(props) {
 
     useEffect(() => {
         if (props.data !== undefined && props.data.length > 0) {
-            console.log(props.data)
             const chart = d3.radviz().data(props.data)
-            chart.disableDraggableAnchors(false);
             chartRef.current = chart;
 
             chart.setFunctionClick((_, event) => {
@@ -71,6 +69,11 @@ export default function RadvizChart(props) {
         }
     }, [props.data]);
 
+
+    //Perchè per visualizzarlo come nell'esempio serve la documentazione, a tentativi non penso che ci si riesce
+    //Il calcolo nuovo è basato sui valori minimi e massimi, il problema è che metà funzioni sono inutilizzate o non hanno un nome chiaro
+
+
     useEffect(() => {
         if (type) props.changeType(type);
     }, [type])
@@ -96,7 +99,6 @@ export default function RadvizChart(props) {
         if (props.hoveredNodeChanged) {
             //I nodi sono composti cosi:
             /*
-
             {
                 id: "p16",
                 dimensions: { STG: 0.05, SCG: 0.07, STR: 0.7, LPR: 0.4, PEG: 0.85 },  // già normalizzati
@@ -156,7 +158,13 @@ export default function RadvizChart(props) {
 
     return (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexWrap: 'wrap' }}>
-            <div style={{ width: 400, height: 400 }} ref={containerRef}></div>
+            <div className="visualization" style={{ width: 400, height: 400 }}>
+                <div id="container">
+                    <div ref={containerRef}>
+                    </div>
+                </div>
+            </div>
+
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
 
@@ -197,7 +205,7 @@ export default function RadvizChart(props) {
 
 
                 <Button
-                
+
                     disabled={type === "original" && selectedNodes.length === 0}
                     variant="outlined"
                     onClick={resetSelectedNodes}

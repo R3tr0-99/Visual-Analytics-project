@@ -14,6 +14,9 @@ export default function RadarNoVectorChart(props) {
     const [lastHoveredNode, setLastHoveredNode] = useState(null);
     const [lastLabels, setLastLabels] = useState([]);
 
+    //In questo file va rifatto il calcolo, ma conviene usare chatgpt
+    //Ora devo congedarmi, vado con il maestro del sesso
+    
     // 1) Hovered node
     useEffect(() => {
         if (hoveredNode) setLastHoveredNode(hoveredNode);
