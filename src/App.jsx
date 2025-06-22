@@ -92,107 +92,151 @@ function App() {
 
   // Layout: due colonne, sinistra larga (8/12), destra stretta (4/12), ogni colonna con due box impilati
   return (
-    <>
-      <Typography variant="h3" gutterBottom>
-        Dashboard Visual-Analytics
+  <>
+    <Typography variant="h3" gutterBottom>
+      Dashboard Visual-Analytics
+    </Typography>
+
+    <FormControl sx={{ minWidth: 240, mb: 2 }}>
+      <InputLabel id="select-csv-label">Scegli CSV</InputLabel>
+      <Select
+        labelId="select-csv-label"
+        id="select-csv"
+        value={selectedFile}
+        label="Scegli CSV"
+        onChange={(e) => setSelectedFile(e.target.value)}
+      >
+        {fileList.map((fileName) => (
+          <MenuItem key={fileName} value={fileName}>
+            {fileName}
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+
+    {!selectedFile ? (
+      <Typography>
+        Nessun CSV selezionato. Seleziona un file dal menu a tendina.
       </Typography>
-
-      <FormControl sx={{ minWidth: 240, mb: 2 }}>
-        <InputLabel id="select-csv-label">Scegli CSV</InputLabel>
-        <Select
-          labelId="select-csv-label"
-          id="select-csv"
-          value={selectedFile}
-          label="Scegli CSV"
-          onChange={(e) => setSelectedFile(e.target.value)}
+    ) : features.length === 0 ? (
+      <Typography color="error">
+        Errore: il file CSV selezionato non contiene colonne numeriche.
+      </Typography>
+    ) : (
+      <Grid container spacing={2} sx={{ height: 'calc(100vh - 180px)' }}>
+        {/* Colonna sinistra: Radviz occupa almeno metà larghezza */}
+        <Grid
+          item
+          xs={12}
+          md={6}  // metà larghezza su md+
+          sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}
         >
-          {fileList.map((fileName) => (
-            <MenuItem key={fileName} value={fileName}>
-              {fileName}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              border: '1px solid #bbb',
+              borderRadius: 2,
+              p: 1,
+              background: '#fff',
+              display: 'flex',
+            }}
+          >
+            <RadvizChart
+              changeType={changeType}
+              data={csvData}
+              hoveredNodeChanged={hoveredNodeChanged}
+              nodeSelectedChanged={nodeSelectedChanged}
+              style={{ flex: 1, width: '100%', height: '100%' }}
+            />
+          </Box>
+        </Grid>
 
-      {!selectedFile ? (
-        <Typography>
-          Nessun CSV selezionato. Seleziona un file dal menu a tendina.
-        </Typography>
-      ) : (
-        <>
-          {features.length === 0 ? (
-            <Typography color="error">
-              Errore: il file CSV selezionato non contiene colonne numeriche.
-            </Typography>
-          ) : (
-            <Grid container spacing={2} sx={{ height: 'calc(100vh - 180px)' }}>
-              {/* Colonna sinistra: RADVIZ sopra, BARCHART sotto */}
-              <Grid size={8} sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <Box sx={{ flex: 1, minHeight: 0, mb: 2, border: '1px solid #bbb', borderRadius: 2, p: 1, background: '#fff' }}>
-                  <RadvizChart
-                    changeType={changeType}
-                    data={csvData}
-                    hoveredNodeChanged={hoveredNodeChanged}
-                    nodeSelectedChanged={nodeSelectedChanged}
-                  />
-                </Box>
-                <Box sx={{ flex: 1, minHeight: 0, border: '1px solid #bbb', borderRadius: 2, p: 1, background: '#fff' }}>
-                  <BarChart hoveredNode={hoveredNode} features={features} />
-                </Box>
-              </Grid>
-              {/* Colonna destra: RadarNoVectorChart sopra, RadarChart sotto */}
-              <Grid size={4} sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                <Box sx={{
-                  flex: 1,
-                  minHeight: 0,
-                  mb: 2,
-                  border: '1px solid #bbb',
-                  borderRadius: 2,
-                  p: 1,
-                  background: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  // Mantieni quadrato
-                  aspectRatio: '1 / 1',
-                  maxHeight: '50%',
-                }}>
-                  <RadarNoVectorChart
-                    type={type}
-                    csvData={csvData}
-                    hoveredNode={hoveredNode}
-                    features={features}
-                  />
-                </Box>
-                <Box sx={{
-                  flex: 1,
-                  minHeight: 0,
-                  border: '1px solid #bbb',
-                  borderRadius: 2,
-                  p: 1,
-                  background: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  // Mantieni quadrato
-                  aspectRatio: '1 / 1',
-                  maxHeight: '50%',
-                }}>
-                  <RadarChart
-                    type={type}
-                    csvData={csvData}
-                    data={selectedNodes}
-                    features={features}
-                    selectedNodesFromRadviz={selectedNodes}
-                  />
-                </Box>
-              </Grid>
-            </Grid>
-          )}
-        </>
-      )}
-    </>
-  );
+        {/* Colonna destra: occupa l'altra metà */}
+        <Grid
+          item
+          xs={12}
+          md={6}
+          sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}
+        >
+          {/* BarChart in alto */}
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              mb: 2,
+              border: '1px solid #bbb',
+              borderRadius: 2,
+              p: 1,
+              background: '#fff',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <BarChart hoveredNode={hoveredNode} features={features} />
+          </Box>
+
+          {/* RadarNoVectorChart e RadarChart sotto */}
+          <Box
+            sx={{
+              flex: 2,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+            }}
+          >
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                border: '1px solid #bbb',
+                borderRadius: 2,
+                p: 1,
+                background: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <RadarNoVectorChart
+                type={type}
+                csvData={csvData}
+                hoveredNode={hoveredNode}
+                features={features}
+                style={{ width: '100%', height: '100%' }}
+              />
+            </Box>
+            <Box
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                border: '1px solid #bbb',
+                borderRadius: 2,
+                p: 1,
+                background: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <RadarChart
+                type={type}
+                csvData={csvData}
+                data={selectedNodes}
+                features={features}
+                selectedNodesFromRadviz={selectedNodes}
+                style={{ width: '100%', height: '100%' }}
+              />
+            </Box>
+          </Box>
+        </Grid>
+      </Grid>
+    )}
+  </>
+);
+
+
 }
 
 export default App;

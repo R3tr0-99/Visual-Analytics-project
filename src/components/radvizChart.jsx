@@ -71,7 +71,7 @@ export default function RadvizChart(props) {
 
 
     //Perchè per visualizzarlo come nell'esempio serve la documentazione, a tentativi non penso che ci si riesce
-    //Il calcolo nuovo è basato sui valori minimi e massimi, il problema è che metà funzioni sono inutilizzate o non hanno un nome chiaro
+    //Il calcolo nuovo è basato sui valori minimi e massimi, il problema è che metà funzioni sono inutilizzate o non hanno un nome
 
 
     useEffect(() => {
@@ -158,7 +158,7 @@ export default function RadvizChart(props) {
 
     return (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexWrap: 'wrap' }}>
-            <div className="visualization" style={{ width: 500, height: 500 }}>
+            <div className="visualization" style={{ width: 900, height: 900 }}>
                 <div id="container">
                     <div ref={containerRef}>
                     </div>
