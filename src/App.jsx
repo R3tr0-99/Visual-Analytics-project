@@ -9,6 +9,8 @@ import {
   Select,
   MenuItem,
   Box,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import RadvizChart from './components/radvizChart';
 import RadarChart from './components/radarChart';
@@ -97,22 +99,27 @@ function App() {
       Dashboard Visual-Analytics
     </Typography>
 
-    <FormControl sx={{ minWidth: 240, mb: 2 }}>
-      <InputLabel id="select-csv-label">Scegli CSV</InputLabel>
-      <Select
-        labelId="select-csv-label"
-        id="select-csv"
+    <Box sx={{ mb: 2 }}>
+      <Typography variant="h6" gutterBottom>
+        Seleziona un file CSV
+      </Typography>
+      <ToggleButtonGroup
         value={selectedFile}
-        label="Scegli CSV"
-        onChange={(e) => setSelectedFile(e.target.value)}
+        exclusive
+        onChange={(e, newValue) => {
+          if (newValue !== null) {
+            setSelectedFile(newValue);
+          }
+        }}
+        aria-label="file selection"
       >
         {fileList.map((fileName) => (
-          <MenuItem key={fileName} value={fileName}>
+          <ToggleButton key={fileName} value={fileName} aria-label={fileName}>
             {fileName}
-          </MenuItem>
+          </ToggleButton>
         ))}
-      </Select>
-    </FormControl>
+      </ToggleButtonGroup>
+    </Box>
 
     {!selectedFile ? (
       <Typography>

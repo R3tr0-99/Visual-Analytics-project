@@ -148,6 +148,7 @@ export default function RadvizChart(props) {
     function resetSelectedNodes() {
         setType("original");
         setSelectedNodes([]);
+        setNodeHovered();
 
         d3.selectAll(".data_point").remove();
         d3.selectAll(".AP_points").remove();
@@ -183,13 +184,7 @@ export default function RadvizChart(props) {
                 <Button disabled={valoreRaggio <= -5} variant="outlined" onClick={decreaseRaggio}>
                     Raggio -
                 </Button>
-                <Button variant="outlined" onClick={() => chartRef.current?.increaseLevelGrid()}>
-                    Level +
-                </Button>
-                <Button variant="outlined" onClick={() => chartRef.current?.decreaseLevelGrid()}>
-                    Level -
-                </Button>
-
+                
                 <Button
                     disabled={type === "eemh"}
                     variant="outlined"
