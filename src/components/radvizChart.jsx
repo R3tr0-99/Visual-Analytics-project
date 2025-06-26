@@ -66,6 +66,15 @@ export default function RadvizChart(props) {
                 if (!el.attr("r-default")) el.attr("r-default", r);
                 el.attr("r-current", r);
             });
+
+            // Avvia l'euristica al caricamento
+            setType("eemh");
+            const data = chartRef.current?.data();
+            if (data) {
+                setSelectedNodes([]);
+                const updated = minEffectivenessErrorHeuristic(data);
+                chartRef.current.updateRadviz(updated);
+            }
         }
     }, [props.data]);
 
