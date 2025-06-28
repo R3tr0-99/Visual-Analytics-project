@@ -1,5 +1,5 @@
 import React, { Fragment, useEffect, useRef, useState, useMemo } from "react";
-import { Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import { select } from "d3-selection";
 import { scaleLinear } from "d3-scale";
 import { minEffectivenessErrorHeuristic } from "../utils/arrangement";
@@ -256,15 +256,13 @@ export default function RadarNoVectorChart(props) {
   };
 
   return (
-    <Fragment>
-      <div>
+    <Box sx={{display:"flex", flexDirection:'column', justifyContent:"center", alignItems:"center", height:'50vh'}}>
         <Typography variant="subtitle1" align="center">
           {lastHoveredNode
             ? `Valori di ${displayName()}`
             : "Nessun nodo selezionato"}
         </Typography>
         <svg ref={ref}></svg>
-      </div>
-    </Fragment>
+    </Box>
   );
 }

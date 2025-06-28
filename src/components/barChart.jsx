@@ -2,7 +2,7 @@ import React, { Fragment, useEffect, useRef, useState } from 'react';
 import { select } from 'd3-selection';
 import { scaleBand, scaleLinear } from 'd3-scale';
 import { axisBottom, axisLeft } from 'd3-axis';
-import { Typography } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 
 export default function BarChart(props) {
   const containerRef = useRef(null);
@@ -171,7 +171,7 @@ export default function BarChart(props) {
   }, [dimensions, lastHoveredNode, lastLabels]);
 
   return (
-    <Fragment>
+    <Box>
       {lastHoveredNode && (
         <Typography sx={{ mb: 1 }}>
           Regione selezionata:{' '}
@@ -184,12 +184,12 @@ export default function BarChart(props) {
         ref={containerRef}
         style={{
           width: '100%',
-          height: '100%', // il genitore deve avere altezza definita
+          height: '50vh',
           position: 'relative',
         }}
       >
         <svg ref={svgRef} style={{ width: '100%', height: '100%' }} />
       </div>
-    </Fragment>
+    </Box>
   );
 }

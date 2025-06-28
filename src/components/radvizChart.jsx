@@ -1,4 +1,4 @@
-import { Button } from "@mui/material";
+import { Box, Button } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { minEffectivenessErrorHeuristic, minEffectivenessErrorHeuristicFast } from "../utils/arrangement";
 
@@ -8,6 +8,7 @@ export default function RadvizChart(props) {
 
     const [selectedNodes, setSelectedNodes] = useState([]);
     const [nodeHovered, setNodeHovered] = useState(null);
+    const [nodeSelected, setNodeSelected] = useState(null);
     const [valoreRaggio, setValoreRaggio] = useState(0);
     const [type, setType] = useState("original");
 
@@ -17,45 +18,85 @@ export default function RadvizChart(props) {
             const chart = d3.radviz().data(props.data)
             chartRef.current = chart;
 
-            chart.setFunctionClick((_, event) => {
-                const clickedNode = d3.select(event.target);
-                const nodeData = event.target.__data__;
+            //FUNZIONE NODO SELEZIONATO
+      // fuori dal callback riepiloghiamo lo stato
+let selectedNodeElement = null;
 
-                const wasSelected = clickedNode.classed("selected");
-                const originalR = clickedNode.attr("r-default") || clickedNode.attr("r");
+chart.setFunctionClick((_, event) => {
+    const clickedEl = d3.select(event.target);
+    const data = event.target.__data__;
 
-                if (wasSelected) {
-                    clickedNode
-                        .classed("selected", false)
-                        .attr("stroke", "black")
-                        .attr("stroke-width", 0.2)
-                        .attr("r", originalR)
-                        .attr("r-current", originalR);
+    // se sto cliccando di nuovo lo stesso nodo: deseleziono
+    if (selectedNodeElement && selectedNodeElement.node() === clickedEl.node()) {
+        // ripristino attributi dal prev salvato
+        const rPrev = +clickedEl.attr('r-prev') || +clickedEl.attr('r-default') || 1;
+        clickedEl
+            .classed('selected', false)
+            .attr('r', rPrev)
+            .attr('stroke', 'black')
+            .attr('stroke-width', 0.2)
+            .attr('r-prev', null);       // facoltativo: pulisco il prev
 
-                    setSelectedNodes(prev => prev.filter((node) => node.id !== nodeData.id));
-                } else {
-                    const currentR = parseFloat(clickedNode.attr("r")) || 1;
+        selectedNodeElement = null;
+        setNodeHovered(null);
+        setSelectedNodes([]);
+        return;
+    }
 
-                    clickedNode
-                        .classed("selected", true)
-                        .attr("stroke", "red")
-                        .attr("stroke-width", 2)
-                        .attr("r", currentR + 1)
-                        .attr("r-current", currentR + 1)
-                        .raise();
+    // sto selezionando un nodo diverso:
+    // se ne avevo già uno, lo ripristino
+    if (selectedNodeElement) {
+        const prevEl = selectedNodeElement;
+        const rPrev = +prevEl.attr('r-prev') || +prevEl.attr('r-default') || 1;
+        prevEl
+            .classed('selected', false)
+            .attr('r', rPrev)
+            .attr('stroke', 'black')
+            .attr('stroke-width', 0.2)
+            .attr('r-prev', null);
+    }
 
-                    setSelectedNodes(prev => [...prev, nodeData]);
-                }
-            });
+    // ora salvo il raggio corrente del nuovo nodo
+    const defaultR = +clickedEl.attr('r-default') || 1;
+    const currentR = +clickedEl.attr('r') || defaultR;
+    clickedEl
+        .attr('r-prev', currentR)      // memorizzo
+        .classed('selected', true)
+        .attr('r', defaultR * 2)
+        .attr('stroke', 'red')
+        .attr('stroke-width', 2)
+        .raise();
 
-            chart.setFunctionMouseOver((_, event) => {
-                const nodeData = event.target.__data__;
-                setNodeHovered(nodeData);
-            });
+    // aggiorno lo stato
+    selectedNodeElement = clickedEl;
+    setNodeHovered(data);
+    setSelectedNodes([data]);
+});
 
-            chart.setFunctionMouseOut(() => {
-                setNodeHovered(null);
-            });
+            // chart.setFunctionMouseOver((_, event) => {
+            //     const nodeData = event.target.__data__;
+            //     console.log(nodeData)
+            //     console.log(nodeHovered)
+            //     if (nodeHovered && (nodeData !== nodeHovered)) {
+            //         console.log(nodeData, nodeHovered)
+            //         nodeHovered.attr("r", defaultR * 10)
+            //     }
+            //     setNodeHovered(nodeData);
+            //     const node = d3.select(event.target);
+            //     node.raise();
+            //     const defaultR = parseFloat(node.attr("r-default")) || 1
+            //     node
+            //         .attr("r", defaultR * 2)
+            //         .attr("stroke", "red")
+            //         .attr("stroke-width", 2)
+
+
+            // })
+
+
+            // chart.setFunctionMouseOut(() => {
+            //     setNodeHovered(null);
+            // });
 
             d3.select(containerRef.current).selectAll("*").remove();
             d3.select(containerRef.current).call(chart);
@@ -146,20 +187,31 @@ export default function RadvizChart(props) {
         }
     }
     function resetSelectedNodes() {
+        // 1. Resetta lo stato di React
         setType("original");
         setSelectedNodes([]);
-        setNodeHovered();
+        setNodeHovered(null);
+        setValoreRaggio(0);
 
-        d3.selectAll(".data_point").remove();
-        d3.selectAll(".AP_points").remove();
-        d3.selectAll(".attr_label").remove();
-        d3.selectAll(".legend").remove();
-        d3.selectAll(".radarlevel").remove();
-        d3.selectAll(".grid")
-            .each(function (d) {
-                d3.select(this).attr("fill", "white")
-            })
-        chartRef.current?.updateRadviz();
+        // 2. Resetta il raggio di base nella libreria e ridisegna
+        if (chartRef.current) {
+            chartRef.current.setRadiusPoints(1); // Usa il valore di default della libreria
+            chartRef.current.updateRadviz();
+        }
+
+        // 3. Forza il ripristino degli attributi di raggio su ogni punto dopo il ridisegno
+        // Questo assicura che ogni punto, anche quello in hover, torni allo stato iniziale
+        setTimeout(() => {
+            d3.selectAll("circle.data_point").each(function () {
+                const el = d3.select(this);
+                const defaultR = el.attr("r-default") || 1;
+                el.attr("r", defaultR);
+                el.attr("r-current", defaultR);
+                el.classed("selected", false)
+                    .attr("stroke", "black")
+                    .attr("stroke-width", 0.2);
+            });
+        }, 100); //ritardo per permettere a D3 di completare l'updateRadviz
     }
 
 
@@ -167,24 +219,21 @@ export default function RadvizChart(props) {
 
 
     return (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexWrap: 'wrap' }}>
-            <div className="visualization" style={{ width: 900, height: 900 }}>
-                <div id="container">
-                    <div ref={containerRef}>
-                    </div>
-                </div>
-            </div>
-
-
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", flexWrap: 'wrap', width: '100%' }}>
+            <Box className="visualization" sx={{ width: '100%' }}>
+                <Box id="container" sx={{ width: '100%', height: '100%' }}>
+                    <Box ref={containerRef} sx={{ width: '100%', height: '100%' }}>
+                    </Box>
+                </Box>
+            </Box>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                 <Button disabled={valoreRaggio >= 5} variant="outlined" onClick={increaseRaggio}>
                     Raggio +
                 </Button>
                 <Button disabled={valoreRaggio <= -5} variant="outlined" onClick={decreaseRaggio}>
                     Raggio -
                 </Button>
-                
+
                 <Button
                     disabled={type === "eemh"}
                     variant="outlined"
@@ -217,13 +266,8 @@ export default function RadvizChart(props) {
                     Reset
                 </Button>
 
-            </div>
-
-            <div>
-
-
-            </div>
-        </div>
+            </Box>
+        </Box>
     );
 };
 
