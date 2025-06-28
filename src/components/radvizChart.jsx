@@ -71,6 +71,8 @@ chart.setFunctionClick((_, event) => {
     selectedNodeElement = clickedEl;
     setNodeHovered(data);
     setSelectedNodes([data]);
+    props.nodeSelectedChanged([data]);
+
 });
 
             // chart.setFunctionMouseOver((_, event) => {

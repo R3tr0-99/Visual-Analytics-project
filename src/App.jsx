@@ -86,7 +86,6 @@ function App() {
   // Layout: due colonne, sinistra larga (8/12), destra stretta (4/12), ogni colonna con due box impilati
   return (
     <Container maxWidth="false">
-
       <Box sx={{ mb: 2 }}>
         <Typography variant="h6" gutterBottom>
           Seleziona un file CSV
@@ -120,7 +119,7 @@ function App() {
       ) : (
         <Grid container spacing={2} sx={{ height: 'calc(100vh - 180px)' }}>
           {/* Colonna sinistra: Radviz occupa almeno metà larghezza */}
-          <Grid size={{ xs: 12, md: 6 }} >
+          <Grid size={{ xs: 12, md: 6 }}>
             <Box
               sx={{
                 flex: 1,
@@ -142,27 +141,29 @@ function App() {
             </Box>
           </Grid>
 
-          {/* Colonna destra: occupa l'altra metà */}
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Box
-                sx={{
-                  height: '50vh',
-                  flex: 1,
-                  minHeight: 0,
-                  mb: 2,
-                  border: '1px solid #bbb',
-                  borderRadius: 2,
-                  p: 1,
-                  background: '#fff',
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                <BarChart hoveredNode={hoveredNode} features={features} />
+              {/* Colonna destra: occupa l'altra metà */}
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                  {/* Adesso in alto c'è StackedBarChart */}
+                  <Box
+                    sx={{
+                      height: '50vh',
+                      flex: 1,
+                      minHeight: 0,
+                      mb: 2,
+                      border: '1px solid #bbb',
+                      borderRadius: 2,
+                      p: 1,
+                      background: '#fff',
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}
+                  >
+                   <StackedBarChart data={csvData} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} />
+
               </Box>
 
-              {/* RadarNoVectorChart e STACKEDBARCHART sotto */}
+              {/* RadarNoVectorChart e BarChart sotto */}
               <Grid container spacing={2}>
                 {/*RADARNOVECTORCHART */}
                 <Grid size={{ xs: 12, xl: 6 }}>
@@ -196,31 +197,10 @@ function App() {
                         style={{ width: '100%', height: '100%' }}
                       />
                     </Box>
-                    {/* <Box
-                  sx={{
-                    flex: 1,
-                    minHeight: 0,
-                    border: '1px solid #bbb',
-                    borderRadius: 2,
-                    p: 1,
-                    background: '#fff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <RadarChart
-                    type={type}
-                    csvData={csvData}
-                    data={selectedNodes}
-                    features={features}
-                    selectedNodesFromRadviz={selectedNodes}
-                    style={{ width: '100%', height: '100%' }}
-                  />
-                </Box> */}
                   </Box>
                 </Grid>
-                {/*STACKEDBARCHART */}
+
+                {/* Ora qui c'è il BarChart (prima c'era StackedBarChart) */}
                 <Grid size={{ xs: 12, xl: 6 }}>
                   <Box
                     sx={{
@@ -235,8 +215,7 @@ function App() {
                       flexDirection: 'column',
                     }}
                   >
-                    <StackedBarChart data={csvData} />
-
+                    <BarChart hoveredNode={hoveredNode} features={features} />
                   </Box>
                 </Grid>
               </Grid>
@@ -246,6 +225,7 @@ function App() {
       )}
     </Container>
   );
+
 
 
 }
