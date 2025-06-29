@@ -1,5 +1,7 @@
 import { Box, Button } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
+// Assumendo che d3 e la libreria radviz siano importate correttamente nel tuo progetto
+// Potrebbe essere necessario un import come 'import * as d3 from "d3";' se non è globale
 import { minEffectivenessErrorHeuristic } from "../utils/arrangement"; 
 
 export default function RadvizChart(props) {
@@ -82,6 +84,9 @@ export default function RadvizChart(props) {
         svgRef.current
             .attr('width', size)
             .attr('height', size)
+            // --- FIX DEFINITIVO: Usa margin: 'auto' per centrare l'SVG ---
+            // Questo dice all'SVG di prendersi tutto lo spazio libero nel suo contenitore flex,
+            // centrandosi perfettamente sia in orizzontale che in verticale.
             .style('margin', 'auto');
 
         svgRef.current.selectAll('*').remove();
@@ -152,9 +157,10 @@ export default function RadvizChart(props) {
                     width: '100%',
                     flex: 1,
                     minHeight: 0,
-                    display: 'flex',
+                    display: 'flex', // Il genitore DEVE essere un contenitore flex
                 }}
             >
+                {/* L'SVG con style('margin', 'auto') verrà appeso qui e si centrerà da solo */}
             </Box>
             
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: 'center', pt: 1, flexShrink: 0 }}>
