@@ -1,22 +1,24 @@
-// StackedBarChart.js
+// stackedBarChart.jsx
+
 import React, { useRef, useEffect } from "react";
 import * as d3 from "d3";
 
 /**
  * StackedBarChart
  * @param {Array<Object>} data - array di oggetti, ciascuno con 'name' e altre chiavi numeriche
- * @param {Array<string>} [colors] - array opzionale di colori
+ * @param {Function} [providedColorScale] - Scala di colori D3 fornita dal genitore (alias di 'colorScale')
  * @param {Object} [margin] - margini opzionali ({ top, right, bottom, left })
  * @param {Object|null} [selectedNode] - nodo selezionato (con almeno .name) per evidenziare colonna
  */
-export default function StackedBarChart({ data, colors, margin = { top: 20, right: 30, bottom: 50, left: 50 }, selectedNode }) {
+// MODIFICA 1: Cambiata la prop da `colors` a `colorScale` e usato un alias `providedColorScale` per coerenza con PieChart.
+export default function StackedBarChart({ data, colorScale: providedColorScale, margin = { top: 20, right: 30, bottom: 50, left: 50 }, selectedNode }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
 
   useEffect(() => {
-    if (!data || data.length === 0) return;
+    if (!data || data.length === 0 || !containerRef.current) return;
 
-    // Prendi tutte le chiavi eccetto 'name' (cioè i partiti)
+    // Prendi tutte le chiavi eccetto 'name' 
     const keys = Object.keys(data[0]).filter(
       k => k !== 'name' && typeof data[0][k] === 'number'
     );
@@ -54,47 +56,45 @@ export default function StackedBarChart({ data, colors, margin = { top: 20, righ
       .nice()
       .range([height, 0]);
 
-    const colorScale = d3
-      .scaleOrdinal()
-      .domain(keys)
-      .range(colors || d3.schemeSet2);
+    // MODIFICA 2: Usa la scala di colori fornita da App.jsx. Se non c'è, ne crea una di fallback.
+    // La variabile `providedColorScale` ora è correttamente definita grazie alla modifica nella firma della funzione.
+    const color = providedColorScale || d3.scaleOrdinal().domain(keys).range(d3.schemeTableau10);
 
     // Disegna le barre
     const bars = g.append("g")
       .selectAll("g")
       .data(series)
       .join("g")
-      .attr("fill", d => colorScale(d.key))
+        .attr("fill", d => color(d.key)) // Applica il colore corretto
       .selectAll("rect")
       .data(d => d)
       .join("rect")
-      .attr("x", d => x(d.data.name))
-      .attr("y", d => y(d[1]))
-      .attr("height", d => y(d[0]) - y(d[1]))
-      .attr("width", x.bandwidth());
+        // MODIFICA 3: Corretto l'accesso alla chiave 'name' per posizionare le barre sull'asse X.
+        .attr("x", d => x(d.data.name)) 
+        .attr("y", d => y(d[1]))
+        .attr("height", d => y(d[0]) - y(d[1]))
+        .attr("width", x.bandwidth());
 
-
-    
-    //log(selectedNode)
-      if (selectedNode && selectedNode.attributes && selectedNode.attributes.name) {
-          bars
-              .style("opacity", d => d.data.name === selectedNode.attributes.name ? 1 : 0.3)
-              .style("stroke", d => d.data.name === selectedNode.attributes.name ? "black" : "none")
-              .style("stroke-width", d => d.data.name === selectedNode.attributes.name ? 2 : 0);
-      } else {
-          bars
-              .style("opacity", 1)
-              .style("stroke", "none")
-              .style("stroke-width", 0);
-      }
+    // Evidenzia la barra selezionata
+    if (selectedNode && selectedNode.attributes && selectedNode.attributes.name) {
+      bars
+        .style("opacity", d => d.data.name === selectedNode.attributes.name ? 1 : 0.3)
+        .style("stroke", d => d.data.name === selectedNode.attributes.name ? "black" : "none")
+        .style("stroke-width", d => d.data.name === selectedNode.attributes.name ? 2 : 0);
+    } else {
+      bars
+        .style("opacity", 1)
+        .style("stroke", "none")
+        .style("stroke-width", 0);
+    }
 
     // Assi
     g.append("g")
       .attr("transform", `translate(0,${height})`)
       .call(d3.axisBottom(x))
       .selectAll("text")
-      .attr("transform", "rotate(-45)")
-      .style("text-anchor", "end");
+        .attr("transform", "rotate(-45)")
+        .style("text-anchor", "end");
 
     g.append("g")
       .call(d3.axisLeft(y));
@@ -102,27 +102,32 @@ export default function StackedBarChart({ data, colors, margin = { top: 20, righ
     // Legenda
     const legendSpacing = 120;
     const legendWidth = keys.length * legendSpacing;
-    const legendX = margin.left + (width - legendWidth) / 2;
+    const legendX = Math.max(margin.left, margin.left + (width - legendWidth) / 2); // Assicura che non vada fuori a sinistra
 
     const legend = svg.append("g")
-      .attr("transform", `translate(${legendX}, 10)`)
+      .attr("font-family", "sans-serif")
+      .attr("font-size", 10)
+      .attr("text-anchor", "start")
+      .attr("transform", `translate(${legendX}, 10)`) // Posiziona la legenda in alto
       .selectAll("g")
       .data(keys)
       .join("g")
-      .attr("transform", (d, i) => `translate(${i * legendSpacing}, 0)`);
+        .attr("transform", (d, i) => `translate(${i * legendSpacing}, 0)`);
 
     legend.append("rect")
-      .attr("width", 18)
-      .attr("height", 18)
-      .attr("fill", d => colorScale(d));
+      .attr("x", 0)
+      .attr("width", 19)
+      .attr("height", 19)
+      .attr("fill", color); // Applica il colore corretto alla legenda
 
     legend.append("text")
       .attr("x", 24)
-      .attr("y", 9)
-      .attr("dy", "0.35em")
+      .attr("y", 9.5)
+      .attr("dy", "0.32em")
       .text(d => d);
 
-  }, [data, colors, margin, selectedNode]);
+  // MODIFICA 4: Pulita la lista delle dipendenze dell'useEffect.
+  }, [data, selectedNode, providedColorScale, margin]);
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
