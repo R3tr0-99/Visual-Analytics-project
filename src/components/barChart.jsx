@@ -171,25 +171,12 @@ export default function BarChart(props) {
   }, [dimensions, lastHoveredNode, lastLabels]);
 
   return (
-    <Box>
-      {lastHoveredNode && (
-        <Typography sx={{ mb: 1 }}>
-          Regione selezionata:{' '}
-          <b>{lastHoveredNode.attributes[keyNode]}</b>
-        </Typography>
-      )}
-      {/* Wrapper che definisce l’area: assicurati che il genitore fornisca un’altezza, 
-          es. Box con sx={{ height: '100%' }} o altezza in px. */}
-      <div
-        ref={containerRef}
-        style={{
-          width: '100%',
-          height: '50vh',
-          position: 'relative',
-        }}
-      >
-        <svg ref={svgRef} style={{ width: '100%', height: '100%' }} />
-      </div>
-    </Box>
+
+    <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
+      <svg ref={svgRef} />
+    </div>
   );
+
 }
+
+

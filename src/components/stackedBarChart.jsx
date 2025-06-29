@@ -74,9 +74,8 @@ export default function StackedBarChart({ data, colors, margin = { top: 20, righ
       .attr("width", x.bandwidth());
 
 
-    // TODO: Evidenzia la colonna se selectedNode è presente
-    //SelectedNode NULL
-    console.log(selectedNode)
+    
+    //log(selectedNode)
       if (selectedNode && selectedNode.attributes && selectedNode.attributes.name) {
           bars
               .style("opacity", d => d.data.name === selectedNode.attributes.name ? 1 : 0.3)
@@ -126,7 +125,7 @@ export default function StackedBarChart({ data, colors, margin = { top: 20, righ
   }, [data, colors, margin, selectedNode]);
 
   return (
-    <div ref={containerRef} style={{ width: '100%', height: '60vh' }}>
+    <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
       <svg ref={svgRef} />
     </div>
   );

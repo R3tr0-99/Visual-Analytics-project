@@ -3,10 +3,10 @@ import * as d3 from 'd3';
 import './App.css';
 import { Grid, Typography, Box, ToggleButton, ToggleButtonGroup, Container } from '@mui/material';
 import RadvizChart from './components/radvizChart';
-import RadarChart from './components/radarChart';
 import RadarNoVectorChart from './components/radarNoVectorChart';
 import BarChart from './components/barChart';
 import StackedBarChart from './components/stackedBarChart';
+import PieChart from './components/pieChart';
 
 function App() {
   // Stati React
@@ -83,150 +83,183 @@ function App() {
     setType(typeTmp)
   }
 
-  // Layout: due colonne, sinistra larga (8/12), destra stretta (4/12), ogni colonna con due box impilati
   return (
-    <Container maxWidth="false">
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="h6" gutterBottom>
-          Seleziona un file CSV
-        </Typography>
-        <ToggleButtonGroup
-          value={selectedFile}
-          exclusive
-          onChange={(e, newValue) => {
-            if (newValue !== null) {
-              setSelectedFile(newValue);
-            }
-          }}
-          aria-label="file selection"
-        >
-          {fileList.map((fileName) => (
-            <ToggleButton key={fileName} value={fileName} aria-label={fileName}>
-              {fileName}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-      </Box>
+  <Container maxWidth={false} sx={{ height: '100vh', p: 2, boxSizing: 'border-box' }}>
+    <Box sx={{ mb: 2 }}>
+      <Typography variant="h6" gutterBottom>
+        Seleziona un file CSV
+      </Typography>
+      <ToggleButtonGroup
+        value={selectedFile}
+        exclusive
+        onChange={(e, newValue) => {
+          if (newValue !== null) {
+            setSelectedFile(newValue);
+          }
+        }}
+        aria-label="file selection"
+      >
+        {fileList.map((fileName) => (
+          <ToggleButton key={fileName} value={fileName} aria-label={fileName}>
+            {fileName}
+          </ToggleButton>
+        ))}
+      </ToggleButtonGroup>
+    </Box>
 
-      {!selectedFile ? (
-        <Typography>
-          Nessun CSV selezionato. Seleziona un file dal menu a tendina.
-        </Typography>
-      ) : features.length === 0 ? (
-        <Typography color="error">
-          Errore: il file CSV selezionato non contiene colonne numeriche.
-        </Typography>
-      ) : (
-        <Grid container spacing={2} sx={{ height: 'calc(100vh - 180px)' }}>
-          {/* Colonna sinistra: Radviz occupa almeno metà larghezza */}
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Box
-              sx={{
-                flex: 1,
-                minHeight: 0,
-                border: '1px solid #bbb',
-                borderRadius: 2,
-                p: 1,
-                background: '#fff',
-                display: 'flex',
-              }}
-            >
-              <RadvizChart
-                changeType={changeType}
-                data={csvData}
-                hoveredNodeChanged={hoveredNodeChanged}
-                nodeSelectedChanged={nodeSelectedChanged}
-                style={{ flex: 1, width: '100%', height: '100%' }}
-              />
-            </Box>
-          </Grid>
+    {!selectedFile ? (
+      <Typography>
+        Nessun CSV selezionato. Seleziona un file dal menu a tendina.
+      </Typography>
+    ) : features.length === 0 ? (
+      <Typography color="error">
+        Errore: il file CSV selezionato non contiene colonne numeriche.
+      </Typography>
+    ) : (
+      <Box sx={{ display: 'flex', height: 'calc(100vh - 80px)', width: '100%', gap: 2 }}>
+        {/* Colonna sinistra: Radviz */}
+        <Box sx={{ width: '45%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Box
+            sx={{
+              width: '100%',
+              height: '100%',
+              border: '1px solid #bbb',
+              borderRadius: 2,
+              p: 1,
+              m: 0.5,
+              backgroundColor: '#fff',
+              display: 'flex',
+              overflow: 'hidden',
+              boxSizing: 'border-box',
+            }}
+          >
+            <RadvizChart
+              changeType={changeType}
+              data={csvData}
+              hoveredNodeChanged={hoveredNodeChanged}
+              nodeSelectedChanged={nodeSelectedChanged}
+              style={{ width: '100%', height: '100%' }}
+            />
+          </Box>
+        </Box>
 
-              {/* Colonna destra: occupa l'altra metà */}
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  {/* Adesso in alto c'è StackedBarChart */}
-                  <Box
-                    sx={{
-                      height: '50vh',
-                      flex: 1,
-                      minHeight: 0,
-                      mb: 2,
-                      border: '1px solid #bbb',
-                      borderRadius: 2,
-                      p: 1,
-                      background: '#fff',
-                      display: 'flex',
-                      flexDirection: 'column',
-                    }}
-                  >
-                   <StackedBarChart data={csvData} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} />
-
+        {/* Colonna destra */}
+        <Box sx={{ width: '55%', height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {/* Riga 1 */}
+          <Box sx={{ display: 'flex', height: '50%', gap: 2 }}>
+            {/* BarChart */}
+            <Box sx={{ width: '70%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Box
+                sx={{
+                  width: '100%',
+                  height: '100%',
+                  border: '1px solid #bbb',
+                  borderRadius: 2,
+                  p: 1,
+                  backgroundColor: '#fff',
+                  boxSizing: 'border-box',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <BarChart
+                  hoveredNode={hoveredNode}
+                  features={features}
+                  style={{ width: '100%', height: '100%' }}
+                />
               </Box>
-
-              {/* RadarNoVectorChart e BarChart sotto */}
-              <Grid container spacing={2}>
-                {/*RADARNOVECTORCHART */}
-                <Grid size={{ xs: 12, xl: 6 }}>
-                  <Box
-                    sx={{
-                      flex: 2,
-                      minHeight: 0,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 2,
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        flex: 1,
-                        minHeight: 0,
-                        border: '1px solid #bbb',
-                        borderRadius: 2,
-                        p: 1,
-                        background: '#fff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <RadarNoVectorChart
-                        type={type}
-                        csvData={csvData}
-                        hoveredNode={hoveredNode}
-                        features={features}
-                        style={{ width: '100%', height: '100%' }}
-                      />
-                    </Box>
-                  </Box>
-                </Grid>
-
-                {/* Ora qui c'è il BarChart (prima c'era StackedBarChart) */}
-                <Grid size={{ xs: 12, xl: 6 }}>
-                  <Box
-                    sx={{
-                      flex: 1,
-                      minHeight: 0,
-                      mb: 2,
-                      border: '1px solid #bbb',
-                      borderRadius: 2,
-                      p: 1,
-                      background: '#fff',
-                      display: 'flex',
-                      flexDirection: 'column',
-                    }}
-                  >
-                    <BarChart hoveredNode={hoveredNode} features={features} />
-                  </Box>
-                </Grid>
-              </Grid>
             </Box>
-          </Grid>
-        </Grid>
-      )}
-    </Container>
-  );
 
+            {/* RadarNoVectorChart */}
+            <Box sx={{ width: '30%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Box
+                sx={{
+                  width: '100%',
+                  height: '100%',
+                  border: '1px solid #bbb',
+                  borderRadius: 2,
+                  p: 1,
+                  backgroundColor: '#fff',
+                  boxSizing: 'border-box',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <RadarNoVectorChart
+                  type={type}
+                  csvData={csvData}
+                  hoveredNode={hoveredNode}
+                  features={features}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </Box>
+            </Box>
+          </Box>
 
+          {/* Riga 2 */}
+          <Box sx={{ display: 'flex', height: '50%', gap: 2 }}>
+            {/* StackedBarChart */}
+            <Box sx={{ width: '70%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Box
+                sx={{
+                  width: '100%',
+                  height: '100%',
+                  border: '1px solid #bbb',
+                  borderRadius: 2,
+                  p: 1,
+                  backgroundColor: '#fff',
+                  boxSizing: 'border-box',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <StackedBarChart
+                  data={csvData}
+                  selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null}
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </Box>
+            </Box>
+
+            {/* PieChart */}
+            <Box sx={{ width: '30%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Box
+                sx={{
+                  width: '100%',
+                  height: '100%',
+                  border: '1px solid #bbb',
+                  borderRadius: 2,
+                  p: 1,
+                  backgroundColor: '#fff',
+                  boxSizing: 'border-box',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <PieChart
+                  data={
+                    selectedNodes[0]
+                      ? features.map((f) => ({ label: f, value: selectedNodes[0][f] }))
+                      : []
+                  }
+                  style={{ width: '100%', height: '100%' }}
+                />
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+      </Box>
+    )}
+  </Container>
+);
 
 }
 
