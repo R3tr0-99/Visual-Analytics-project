@@ -9,7 +9,7 @@ export default function RadarNoVectorChart(props) {
   const ref = useRef(null);
 
   // Dimensioni SVG e radar
-  const size = 400;
+  const size = 300;
   const levels = 5;
   const radius = size / 2 - 40;
 
@@ -256,7 +256,7 @@ export default function RadarNoVectorChart(props) {
   };
 
   return (
-    <Box sx={{display:"flex", flexDirection:'column', justifyContent:"center", alignItems:"center", height:'50vh'}}>
+    <Box sx={{display:"flex", flexDirection:'column', justifyContent:"center", alignItems:"center"}}>
         <Typography variant="subtitle1" align="center">
           {lastHoveredNode
             ? `Valori di ${displayName()}`

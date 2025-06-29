@@ -52,7 +52,7 @@ export default function PieChart({ data, colorScale: providedColorScale, margin 
         .attr("stroke", "white")
         .style("stroke-width", "2px");
 
-    // --- INIZIO MODIFICA: ETICHETTE CON PERCENTUALI ---
+   
 
     // Calcola il valore totale per poter derivare le percentuali
     const total = d3.sum(data, d => d.value);

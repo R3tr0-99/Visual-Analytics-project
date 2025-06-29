@@ -1,35 +1,31 @@
-// stackedBarChart.jsx
-
 import React, { useRef, useEffect } from "react";
 import * as d3 from "d3";
 
 /**
- * StackedBarChart
+ * 100% StackedBarChart. Assumes input data is already normalized where each row sums to 1.
  * @param {Array<Object>} data - array di oggetti, ciascuno con 'name' e altre chiavi numeriche
- * @param {Function} [providedColorScale] - Scala di colori D3 fornita dal genitore (alias di 'colorScale')
+ * @param {Function} [colorScale] - Scala di colori D3 fornita dal genitore
  * @param {Object} [margin] - margini opzionali ({ top, right, bottom, left })
- * @param {Object|null} [selectedNode] - nodo selezionato (con almeno .name) per evidenziare colonna
+ * @param {Object|null} [selectedNode] - nodo selezionato per evidenziare colonna
  */
-// MODIFICA 1: Cambiata la prop da `colors` a `colorScale` e usato un alias `providedColorScale` per coerenza con PieChart.
-export default function StackedBarChart({ data, colorScale: providedColorScale, margin = { top: 20, right: 30, bottom: 50, left: 50 }, selectedNode }) {
+export default function StackedBarChart({ data, colorScale, margin = { top: 40, right: 30, bottom: 50, left: 50 }, selectedNode }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
 
   useEffect(() => {
     if (!data || data.length === 0 || !containerRef.current) return;
 
-    // Prendi tutte le chiavi eccetto 'name' 
     const keys = Object.keys(data[0]).filter(
       k => k !== 'name' && typeof data[0][k] === 'number'
     );
     if (keys.length === 0) return;
 
-    // Dimensioni effettive
+    // Dimensioni
     const { width: fullWidth, height: fullHeight } = containerRef.current.getBoundingClientRect();
     const width = fullWidth - margin.left - margin.right;
     const height = fullHeight - margin.top - margin.bottom;
 
-    // Clear e setup SVG
+    // Setup SVG
     const svg = d3.select(svgRef.current)
       .attr("width", fullWidth)
       .attr("height", fullHeight);
@@ -39,95 +35,101 @@ export default function StackedBarChart({ data, colorScale: providedColorScale, 
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    // Stack dei dati
+    // D3 stack lavora direttamente sui dati, che si assume siano già normalizzati
     const stackGen = d3.stack().keys(keys);
     const series = stackGen(data);
+    
+    const x = d3.scaleBand().domain(data.map(d => d.name)).range([0, width]).padding(0.1);
 
-    // Scale
-    const x = d3
-      .scaleBand()
-      .domain(data.map(d => d.name))
-      .range([0, width])
-      .padding(0.1);
-
-    const y = d3
-      .scaleLinear()
-      .domain([0, d3.max(series, s => d3.max(s, d => d[1]))])
-      .nice()
+    // --- FIX 1: IL DOMINIO DELLA SCALA Y DEVE ESSERE FISSO ---
+    // Poiché è un grafico al 100% e i dati sono già normalizzati,
+    // il dominio deve essere SEMPRE [0, 1]. Questo assicura che una barra
+    // che somma a 1 riempia l'intera altezza del grafico.
+    const y = d3.scaleLinear()
+      .domain([0, 1]) 
       .range([height, 0]);
 
-    // MODIFICA 2: Usa la scala di colori fornita da App.jsx. Se non c'è, ne crea una di fallback.
-    // La variabile `providedColorScale` ora è correttamente definita grazie alla modifica nella firma della funzione.
-    const color = providedColorScale || d3.scaleOrdinal().domain(keys).range(d3.schemeTableau10);
-
-    // Disegna le barre
-    const bars = g.append("g")
-      .selectAll("g")
-      .data(series)
-      .join("g")
-        .attr("fill", d => color(d.key)) // Applica il colore corretto
-      .selectAll("rect")
-      .data(d => d)
-      .join("rect")
-        // MODIFICA 3: Corretto l'accesso alla chiave 'name' per posizionare le barre sull'asse X.
+    const color = colorScale || d3.scaleOrdinal().domain(keys).range(d3.schemeTableau10);
+    
+    const bars = g.append("g").selectAll("g").data(series).join("g").attr("fill", d => color(d.key))
+      .selectAll("rect").data(d => d).join("rect")
         .attr("x", d => x(d.data.name)) 
         .attr("y", d => y(d[1]))
         .attr("height", d => y(d[0]) - y(d[1]))
         .attr("width", x.bandwidth());
 
-    // Evidenzia la barra selezionata
-    if (selectedNode && selectedNode.attributes && selectedNode.attributes.name) {
-      bars
-        .style("opacity", d => d.data.name === selectedNode.attributes.name ? 1 : 0.3)
-        .style("stroke", d => d.data.name === selectedNode.attributes.name ? "black" : "none")
-        .style("stroke-width", d => d.data.name === selectedNode.attributes.name ? 2 : 0);
-    } else {
-      bars
-        .style("opacity", 1)
-        .style("stroke", "none")
-        .style("stroke-width", 0);
+    if (selectedNode?.attributes?.name) {
+      const selectedName = selectedNode.attributes.name;
+      bars.style("opacity", d => d.data.name === selectedName ? 1 : 0.3)
+          .style("stroke", d => d.data.name === selectedName ? "black" : "none")
+          .style("stroke-width", d => d.data.name === selectedName ? 2 : 0);
     }
+    
+    g.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x)).selectAll("text").attr("transform", "rotate(-45)").style("text-anchor", "end");
 
-    // Assi
+    
     g.append("g")
-      .attr("transform", `translate(0,${height})`)
-      .call(d3.axisBottom(x))
-      .selectAll("text")
-        .attr("transform", "rotate(-45)")
-        .style("text-anchor", "end");
+      .call(d3.axisLeft(y).ticks(5).tickFormat(d3.format(".0%")));
+    
+    // --- Fine disegno grafico ---
 
-    g.append("g")
-      .call(d3.axisLeft(y));
 
-    // Legenda
-    const legendSpacing = 120;
-    const legendWidth = keys.length * legendSpacing;
-    const legendX = Math.max(margin.left, margin.left + (width - legendWidth) / 2); // Assicura che non vada fuori a sinistra
+    // --- INIZIO LOGICA PER LEGGENDA CON FONT DINAMICO ---
 
-    const legend = svg.append("g")
+    // 1. Crea il gruppo principale per la legenda
+    const legendGroup = svg.append("g")
       .attr("font-family", "sans-serif")
-      .attr("font-size", 10)
+      .attr("font-size", 10) // Dimensione di partenza del font
       .attr("text-anchor", "start")
-      .attr("transform", `translate(${legendX}, 10)`) // Posiziona la legenda in alto
-      .selectAll("g")
-      .data(keys)
-      .join("g")
-        .attr("transform", (d, i) => `translate(${i * legendSpacing}, 0)`);
+      .attr("transform", `translate(${margin.left}, 10)`); // Posiziona in alto
 
-    legend.append("rect")
-      .attr("x", 0)
+    // 2. Crea tutti gli elementi della legenda
+    const legendItems = legendGroup.selectAll("g")
+      .data(keys)
+      .join("g");
+
+    legendItems.append("rect")
       .attr("width", 19)
       .attr("height", 19)
-      .attr("fill", color); // Applica il colore corretto alla legenda
+      .attr("fill", color);
 
-    legend.append("text")
+    legendItems.append("text")
       .attr("x", 24)
       .attr("y", 9.5)
       .attr("dy", "0.32em")
       .text(d => d);
 
-  // MODIFICA 4: Pulita la lista delle dipendenze dell'useEffect.
-  }, [data, selectedNode, providedColorScale, margin]);
+    // 3. Misura la larghezza totale e posiziona inizialmente
+    let totalLegendWidth = 0;
+    const legendPadding = 15; // Spazio tra gli elementi
+
+    legendItems.each(function() {
+      const itemWidth = this.getBBox().width;
+      // Posiziona l'elemento corrente
+      d3.select(this).attr("transform", `translate(${totalLegendWidth}, 0)`);
+      // Aggiorna la larghezza totale per il prossimo
+      totalLegendWidth += itemWidth + legendPadding;
+    });
+
+    totalLegendWidth -= legendPadding;
+
+    // 4. Se la legenda è troppo larga, calcola il fattore di scala e riposiziona
+    if (totalLegendWidth > width) {
+      const scaleFactor = width / totalLegendWidth;
+      
+      // Applica la nuova dimensione del font al gruppo principale
+      legendGroup.attr("font-size", 10 * scaleFactor);
+
+      // Ora che il font è più piccolo, ri-calcolare le posizioni
+      let newCurrentX = 0;
+      legendItems.each(function() {
+        const itemWidth = this.getBBox().width; // Ottieni la nuova larghezza (più piccola)
+        d3.select(this).attr("transform", `translate(${newCurrentX}, 0)`);
+        newCurrentX += itemWidth + legendPadding;
+      });
+    }
+
+  }, [data, selectedNode, colorScale, margin]);
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
