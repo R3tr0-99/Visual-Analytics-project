@@ -21,6 +21,9 @@ export default function RadvizChart(props) {
     useEffect(() => {
         if (!containerRef.current) return;
 
+        // Pulisce completamente il contenitore prima di creare l'SVG
+        d3.select(containerRef.current).selectAll('*').remove();
+        
         svgRef.current = d3.select(containerRef.current).append('svg');
 
         const observeTarget = containerRef.current;
@@ -32,7 +35,13 @@ export default function RadvizChart(props) {
         
         resizeObserver.observe(observeTarget);
         
-        return () => resizeObserver.disconnect();
+        return () => {
+            resizeObserver.disconnect();
+            // Pulisce anche quando il componente viene smontato
+            if (containerRef.current) {
+                d3.select(containerRef.current).selectAll('*').remove();
+            }
+        };
     }, []);
 
     // Effect #2: Eseguito per il disegno e l'aggiornamento del grafico
@@ -45,6 +54,16 @@ export default function RadvizChart(props) {
 
         const size = Math.min(dimensions.width, dimensions.height);
         if (size <= 0) return;
+
+        // Assicuriamoci che ci sia solo un SVG nel contenitore
+        if (containerRef.current) {
+            const existingSvgs = d3.select(containerRef.current).selectAll('svg');
+            if (existingSvgs.size() > 1) {
+                // Se ci sono più SVG, rimuovi tutti tranne il primo
+                existingSvgs.nodes().slice(1).forEach(node => node.remove());
+                svgRef.current = d3.select(existingSvgs.node());
+            }
+        }
 
         if (!chartRef.current) {
             chartRef.current = d3.radviz();
@@ -84,9 +103,6 @@ export default function RadvizChart(props) {
         svgRef.current
             .attr('width', size)
             .attr('height', size)
-            // --- FIX DEFINITIVO: Usa margin: 'auto' per centrare l'SVG ---
-            // Questo dice all'SVG di prendersi tutto lo spazio libero nel suo contenitore flex,
-            // centrandosi perfettamente sia in orizzontale che in verticale.
             .style('margin', 'auto');
 
         svgRef.current.selectAll('*').remove();
@@ -157,10 +173,12 @@ export default function RadvizChart(props) {
                     width: '100%',
                     flex: 1,
                     minHeight: 0,
-                    display: 'flex', // Il genitore DEVE essere un contenitore flex
+                    display: 'flex',
+                    justifyContent: 'center', // Centra orizzontalmente
+                    alignItems: 'center',     // Centra verticalmente
                 }}
             >
-                {/* L'SVG con style('margin', 'auto') verrà appeso qui e si centrerà da solo */}
+                {/* L'SVG sarà perfettamente centrato nel contenitore */}
             </Box>
             
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: 'center', pt: 1, flexShrink: 0 }}>
