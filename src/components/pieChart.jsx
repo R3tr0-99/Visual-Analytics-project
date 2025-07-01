@@ -15,6 +15,17 @@ export default function PieChart({ data, title, colorScale: providedColorScale, 
         return;
     }
 
+    // --- MODIFICA CHIAVE: Filtra i dati per rimuovere gli elementi con valore 0 ---
+    // Questo previene sia il disegno della fetta (che sarebbe invisibile) sia dell'etichetta.
+    const dataWithValues = data.filter(d => d.value > 0);
+
+    // Se dopo il filtro non ci sono più dati, pulisci e esci.
+    if (dataWithValues.length === 0) {
+        svg.selectAll("*").remove();
+        return;
+    }
+    // --- FINE MODIFICA ---
+
     const { width: fullWidth, height: fullHeight } = containerRef.current.getBoundingClientRect();
     const width = fullWidth - margin.left - margin.right;
     const height = fullHeight - margin.top - margin.bottom;
@@ -26,25 +37,27 @@ export default function PieChart({ data, title, colorScale: providedColorScale, 
     const g = svg.append("g")
       .attr("transform", `translate(${fullWidth / 2}, ${fullHeight / 2})`);
 
-    const colorScale = providedColorScale || d3.scaleOrdinal().domain(data.map(d => d.label)).range(d3.schemeTableau10);
+    const colorScale = providedColorScale || d3.scaleOrdinal().domain(dataWithValues.map(d => d.label)).range(d3.schemeTableau10);
 
+    // Ora usiamo `dataWithValues` per generare il grafico
     const pie = d3.pie().value(d => d.value).sort(null);
     const arc = d3.arc().innerRadius(0).outerRadius(radius);
 
     g.selectAll("path")
-      .data(pie(data))
+      .data(pie(dataWithValues)) // <-- Usa i dati filtrati
       .join("path")
         .attr("d", arc)
         .attr("fill", d => colorScale(d.data.label))
         .attr("stroke", "white")
         .style("stroke-width", "2px");
 
-    const total = d3.sum(data, d => d.value);
+    const total = d3.sum(dataWithValues, d => d.value); // <-- Usa i dati filtrati
     const formatPercent = d3.format(".1%");
     const labelArc = d3.arc().innerRadius(radius * 0.6).outerRadius(radius * 0.6);
 
+    // Le etichette vengono create solo per i dati con valori
     const labels = g.selectAll('text.label')
-      .data(pie(data))
+      .data(pie(dataWithValues)) // <-- Usa i dati filtrati
       .join('text')
       .attr('class', 'label')
       .attr('transform', d => `translate(${labelArc.centroid(d)})`)
@@ -54,6 +67,7 @@ export default function PieChart({ data, title, colorScale: providedColorScale, 
       .style('fill', 'white')
       .style('text-shadow', '0 0 3px black, 0 0 3px black');
       
+    
     labels.append('tspan')
         .attr('x', 0)
         .attr('y', '-0.4em')
@@ -65,7 +79,9 @@ export default function PieChart({ data, title, colorScale: providedColorScale, 
         .style('font-size', '10px')
         .text(d => {
             const percent = total > 0 ? d.data.value / total : 0;
-            return percent > 0.01 ? formatPercent(percent) : "";
+            //lo lasciamo per sicurezza
+            // nel caso di valori molto piccoli ma non nulli.
+            return percent > 0.001 ? formatPercent(percent) : "";
         });
 
     svg.append("text")
@@ -75,10 +91,10 @@ export default function PieChart({ data, title, colorScale: providedColorScale, 
         .style("font-size", "14px")
         .style("font-weight", "bold")
         .style("fill", "#333")
-        .text(title || "Distribuzione Valori Nodo"); // <-- Use the title prop
+        .text(title || "Distribuzione Valori Nodo");
 
 
-  }, [data, title, providedColorScale, margin]); // <-- Added title to dependencies
+  }, [data, title, providedColorScale, margin]);
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>

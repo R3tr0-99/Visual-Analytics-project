@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, createRef, useRef } from 'react';
 import * as d3 from 'd3';
 import './App.css';
-import { Typography, Box, ToggleButton, ToggleButtonGroup, Container, Slider, Modal, IconButton, Tooltip } from '@mui/material'; // Aggiunto Tooltip
+import { Typography, Box, ToggleButton, ToggleButtonGroup, Container, Slider, Modal, IconButton, Tooltip } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import ZoomInIcon from '@mui/icons-material/ZoomIn'; 
 import RadvizChart from './components/radvizChart';
 import RadarChart from './components/radarChart';
 import BarChart from './components/barChart';
@@ -26,7 +25,6 @@ const modalStyle = {
 };
 
 function App() {
-  // ... (stati esistenti)
   const [fileList, setFileList] = useState([]);
   const [selectedFile, setSelectedFile] = useState('');
   const [csvData, setCsvData] = useState([]);
@@ -35,14 +33,14 @@ function App() {
   const [hoveredNode, setHoveredNode] = useState(null);
   const [type, setType] = useState("original");
   const [numberOfRows, setNumberOfRows] = useState(0);
-
   const [zoomedChart, setZoomedChart] = useState(null);
+
+  const pieChartRefs = useRef([]);
 
   const handleZoom = (chartKey) => {
     setZoomedChart(current => (current === chartKey ? null : chartKey));
   };
   
-
   useEffect(() => {
     fetch('/data/files.json')
       .then((res) => res.json())
@@ -52,17 +50,14 @@ function App() {
 
   useEffect(() => {
     if (!selectedFile) {
-      setCsvData([]);
-      setFeatures([]);
-      setNumberOfRows(0);
-      return;
+      setCsvData([]); setFeatures([]); setNumberOfRows(0); return;
     }
 
     const url = `/data/${selectedFile}`;
     d3.csv(url)
       .then((rawData) => {
         if (!rawData || rawData.length === 0) {
-            setCsvData([]); setFeatures([]); setNumberOfRows(0); return;
+          setCsvData([]); setFeatures([]); setNumberOfRows(0); return;
         }
 
         const filtered = rawData.filter((d) => d.name && d.name.trim() !== '');
@@ -88,11 +83,29 @@ function App() {
       });
   }, [selectedFile]);
 
+  // --- FIX: MOVE slicedData DECLARATION UP ---
   const slicedData = useMemo(() => {
     if (!csvData || csvData.length === 0) return [];
     const count = Math.min(Math.max(1, numberOfRows || 0), csvData.length);
     return csvData.slice(0, count);
   }, [csvData, numberOfRows]);
+
+  // --- Now it's safe to have hooks that depend on slicedData ---
+  useEffect(() => {
+    pieChartRefs.current = Array(slicedData.length).fill().map((_, i) => pieChartRefs.current[i] || createRef());
+  }, [slicedData.length]);
+
+  const handleBarClick = useCallback((clickedNodeName) => {
+    const nodeIndex = slicedData.findIndex(node => node.name === clickedNodeName);
+
+    if (nodeIndex !== -1 && pieChartRefs.current[nodeIndex]?.current) {
+      pieChartRefs.current[nodeIndex].current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center'
+      });
+    }
+  }, [slicedData]);
 
   const colorScale = useMemo(() => {
     if (features.length === 0) return null;
@@ -116,11 +129,11 @@ function App() {
     radviz: <RadvizChart changeType={changeType} data={slicedData} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={nodeSelectedChanged} />,
     bar: <BarChart hoveredNode={hoveredNode} features={features} colorScale={colorScale} />,
     radar: <RadarChart data={slicedData} features={features} type={type} />,
-    stacked: <StackedBarChart data={slicedData} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} />,
+    stacked: <StackedBarChart data={slicedData} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} onBarClick={handleBarClick} />,
     pie: (
       <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%', overflowX: 'auto', '&::-webkit-scrollbar': { height: '8px' }, '&::-webkit-scrollbar-thumb': { backgroundColor: '#ccc', borderRadius: '4px' } }}>
-        {slicedData.map((node) => (
-          <Box key={node.id} sx={{ minWidth: '300px', height: '100%', flexShrink: 0 }}>
+        {slicedData.map((node, index) => (
+          <Box key={node.id} ref={pieChartRefs.current[index]} sx={{ minWidth: '300px', height: '100%', flexShrink: 0 }}>
             <PieChart title={`Nodo: ${node.name || node.id}`} data={features.map(key => ({ label: key, value: node[key] }))} colorScale={colorScale} />
           </Box>
         ))}
@@ -131,7 +144,7 @@ function App() {
 
   return (
     <Container maxWidth={false} sx={{ height: '100vh', p: 2, boxSizing: 'border-box' }}>
-      {/* ... (Header e Slider) ... */}
+      {/* Layout remains the same */}
       <Box sx={{ mb: 1 }}>
         <Typography variant="h6" gutterBottom>Seleziona un file CSV</Typography>
         <ToggleButtonGroup value={selectedFile} exclusive onChange={(e, newValue) => { if (newValue !== null) setSelectedFile(newValue); }} aria-label="file selection">
@@ -152,71 +165,28 @@ function App() {
         <Typography>Caricamento dati per {selectedFile}...</Typography>
       ) : (
         <Box sx={{ display: 'flex', height: `calc(100vh - ${csvData.length > 0 ? '160px' : '100px'})`, width: '100%', gap: 2 }}>
-          {/* --- Doubleclick --- */}
-          {/*  Tooltip per informare l'utente */}
           <Box sx={{ width: '45%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Tooltip title="Doppio click per ingrandire">
-              <Box onDoubleClick={() => handleZoom('radviz')} sx={{ width: '100%', height: '100%', border: '1px solid #bbb', borderRadius: 2, p: 1, backgroundColor: '#fff', display: 'flex', overflow: 'hidden', boxSizing: 'border-box' }}>
-                {chartComponents.radviz}
-              </Box>
-            </Tooltip>
+            <Tooltip title="Doppio click per ingrandire"><Box onDoubleClick={() => handleZoom('radviz')} sx={{ width: '100%', height: '100%', border: '1px solid #bbb', borderRadius: 2, p: 1, backgroundColor: '#fff', display: 'flex', overflow: 'hidden', boxSizing: 'border-box' }}>{chartComponents.radviz}</Box></Tooltip>
           </Box>
-
           <Box sx={{ width: '55%', height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
             <Box sx={{ display: 'flex', height: '50%', gap: 2 }}>
-                <Tooltip title="Doppio click per ingrandire">
-                  <Box onDoubleClick={() => handleZoom('bar')} sx={{ width: '70%', height: '100%', border: '1px solid #bbb', borderRadius: 2, p: 1, backgroundColor: '#fff', boxSizing: 'border-box', overflow: 'hidden' }}>
-                    {chartComponents.bar}
-                  </Box>
-                </Tooltip>
-                <Tooltip title="Doppio click per ingrandire">
-                  <Box onDoubleClick={() => handleZoom('radar')} sx={{ width: '30%', height: '100%', border: '1px solid #bbb', borderRadius: 2, p: 1, backgroundColor: '#fff', boxSizing: 'border-box', overflow: 'hidden', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    {chartComponents.radar}
-                  </Box>
-                </Tooltip>
+              <Tooltip title="Doppio click per ingrandire"><Box onDoubleClick={() => handleZoom('bar')} sx={{ width: '70%', height: '100%', border: '1px solid #bbb', borderRadius: 2, p: 1, backgroundColor: '#fff', boxSizing: 'border-box', overflow: 'hidden' }}>{chartComponents.bar}</Box></Tooltip>
+              <Tooltip title="Doppio click per ingrandire"><Box onDoubleClick={() => handleZoom('radar')} sx={{ width: '30%', height: '100%', border: '1px solid #bbb', borderRadius: 2, p: 1, backgroundColor: '#fff', boxSizing: 'border-box', overflow: 'hidden', display:'flex', alignItems:'center', justifyContent:'center' }}>{chartComponents.radar}</Box></Tooltip>
             </Box>
-
             <Box sx={{ display: 'flex', height: '50%', gap: 2 }}>
-                <Tooltip title="Doppio click per ingrandire">
-                  <Box onDoubleClick={() => handleZoom('stacked')} sx={{ width: '70%', height: '100%', border: '1px solid #bbb', borderRadius: 2, p: 1, backgroundColor: '#fff', boxSizing: 'border-box', overflow: 'hidden' }}>
-                    {chartComponents.stacked}
-                  </Box>
-                </Tooltip>
-                <Tooltip title="Doppio click per ingrandire">
-                  <Box onDoubleClick={() => handleZoom('pie')} sx={{ width: '30%', height: '100%', border: '1px solid #bbb', borderRadius: 2, p: 1, backgroundColor: '#fff', boxSizing: 'border-box', overflow: 'hidden' }}>
-                     {/* Non serve più disabilitare gli eventi pointer qui */}
-                     {chartComponents.pie}
-                  </Box>
-                </Tooltip>
+              <Tooltip title="Doppio click per ingrandire"><Box onDoubleClick={() => handleZoom('stacked')} sx={{ width: '70%', height: '100%', border: '1px solid #bbb', borderRadius: 2, p: 1, backgroundColor: '#fff', boxSizing: 'border-box', overflow: 'hidden' }}>{chartComponents.stacked}</Box></Tooltip>
+              <Tooltip title="Doppio click per ingrandire"><Box onDoubleClick={() => handleZoom('pie')} sx={{ width: '30%', height: '100%', border: '1px solid #bbb', borderRadius: 2, p: 1, backgroundColor: '#fff', boxSizing: 'border-box', overflow: 'hidden' }}>{chartComponents.pie}</Box></Tooltip>
             </Box>
           </Box>
         </Box>
       )}
 
-      {/* Il Modal rimane invariato */}
-      <Modal
-        open={zoomedChart !== null}
-        onClose={() => handleZoom(null)}
-        aria-labelledby="zoomed-chart-title"
-      >
+      <Modal open={zoomedChart !== null} onClose={() => handleZoom(null)} aria-labelledby="zoomed-chart-title">
         <Box sx={modalStyle}>
-          <IconButton
-            aria-label="close"
-            onClick={() => handleZoom(null)}
-            sx={{
-              position: 'absolute',
-              right: 8,
-              top: 8,
-              color: (theme) => theme.palette.grey[500],
-            }}
-          >
-            <CloseIcon />
-          </IconButton>
-          
+          <IconButton aria-label="close" onClick={() => handleZoom(null)} sx={{ position: 'absolute', right: 8, top: 8, color: (theme) => theme.palette.grey[500],}}><CloseIcon /></IconButton>
           {zoomedChart && chartComponents[zoomedChart]}
         </Box>
       </Modal>
-
     </Container>
   );
 }
