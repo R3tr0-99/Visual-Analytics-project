@@ -119,6 +119,9 @@ export default function RadvizChart(props) {
         if (type === "eemh") {
             const updated = minEffectivenessErrorHeuristic(chartRef.current.data());
             chartRef.current.updateRadviz(updated);
+        } else if (type === "original") {
+            // Ripristina la configurazione originale del radviz
+            chartRef.current.updateRadviz();
         }
 
     }, [props.data, dimensions, type]);
@@ -162,6 +165,21 @@ export default function RadvizChart(props) {
         setValoreRaggio(0);
         if (chartRef.current) {
             chartRef.current.setRadiusPoints(1);
+            // Forza il ridisegno completo per riavviare l'animazione
+            setTimeout(() => {
+                if (svgRef.current && chartRef.current) {
+                    svgRef.current.selectAll('*').remove();
+                    svgRef.current.call(chartRef.current);
+                    
+                    // Ripristina gli attributi dei punti
+                    d3.selectAll("circle.data_point").each(function () {
+                        const el = d3.select(this);
+                        const r = parseFloat(el.attr("r")) || 1;
+                        if (!el.attr("r-default")) el.attr("r-default", r);
+                        el.attr("r-current", r);
+                    });
+                }
+            }, 50);
         }
     }
     

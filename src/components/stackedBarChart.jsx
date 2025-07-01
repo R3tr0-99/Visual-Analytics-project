@@ -2,11 +2,11 @@ import React, { useRef, useEffect } from "react";
 import * as d3 from "d3";
 
 /**
- * 100% StackedBarChart. Assumes input data is already normalized where each row sums to 1.
- * @param {Array<Object>} data - array di oggetti, ciascuno con 'name' e altre chiavi numeriche
- * @param {Function} [colorScale] - Scala di colori D3 fornita dal genitore
- * @param {Object} [margin] - margini opzionali ({ top, right, bottom, left })
- * @param {Object|null} [selectedNode] - nodo selezionato per evidenziare colonna
+ * 100% StackedBarChart. Normalizza i dati in ingresso per mostrare le proporzioni percentuali.
+ * @param {Array<Object>} data - array di oggetti, ciascuno con 'name' e altre chiavi numeriche (dati raw).
+ * @param {Function} [colorScale] - Scala di colori D3 fornita dal genitore.
+ * @param {Object} [margin] - margini opzionali.
+ * @param {Object|null} [selectedNode] - nodo selezionato per evidenziare la colonna.
  */
 export default function StackedBarChart({ data, colorScale, margin = { top: 40, right: 30, bottom: 50, left: 50 }, selectedNode }) {
   const svgRef = useRef(null);
@@ -15,10 +15,29 @@ export default function StackedBarChart({ data, colorScale, margin = { top: 40, 
   useEffect(() => {
     if (!data || data.length === 0 || !containerRef.current) return;
 
+    // Estrae le chiavi numeriche che verranno usate per gli "stack"
     const keys = Object.keys(data[0]).filter(
-      k => k !== 'name' && typeof data[0][k] === 'number'
+      k => k !== 'name' && k !== 'id' && typeof data[0][k] === 'number'
     );
     if (keys.length === 0) return;
+
+    // --- INIZIO FIX: NORMALIZZAZIONE DEI DATI ---
+    // Poiché questo è un grafico 100% stacked, dobbiamo calcolare le percentuali per ogni riga.
+    const normalizedData = data.map(d => {
+      // 1. Calcola la somma totale dei valori per la riga corrente.
+      const total = keys.reduce((acc, key) => acc + (d[key] || 0), 0);
+      
+      // 2. Crea un nuovo oggetto per la riga con i valori normalizzati.
+      const normalizedRow = { name: d.name, id: d.id };
+      
+      // 3. Calcola il valore percentuale per ogni chiave.
+      keys.forEach(key => {
+        normalizedRow[key] = total > 0 ? (d[key] || 0) / total : 0;
+      });
+      
+      return normalizedRow;
+    });
+    // --- FINE FIX ---
 
     // Dimensioni
     const { width: fullWidth, height: fullHeight } = containerRef.current.getBoundingClientRect();
@@ -35,16 +54,15 @@ export default function StackedBarChart({ data, colorScale, margin = { top: 40, 
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    // D3 stack lavora direttamente sui dati, che si assume siano già normalizzati
+    // D3 stack ora lavora sui dati normalizzati
     const stackGen = d3.stack().keys(keys);
-    const series = stackGen(data);
+    const series = stackGen(normalizedData); // <-- USA I DATI NORMALIZZATI
     
+    // La scala X usa i nomi originali
     const x = d3.scaleBand().domain(data.map(d => d.name)).range([0, width]).padding(0.1);
 
-    // --- FIX 1: IL DOMINIO DELLA SCALA Y DEVE ESSERE FISSO ---
-    // Poiché è un grafico al 100% e i dati sono già normalizzati,
-    // il dominio deve essere SEMPRE [0, 1]. Questo assicura che una barra
-    // che somma a 1 riempia l'intera altezza del grafico.
+    // La scala Y ora funziona correttamente perché il dominio [0, 1] corrisponde
+    // ai dati normalizzati (dove il totale massimo per ogni barra è 1).
     const y = d3.scaleLinear()
       .domain([0, 1]) 
       .range([height, 0]);
@@ -55,9 +73,10 @@ export default function StackedBarChart({ data, colorScale, margin = { top: 40, 
       .selectAll("rect").data(d => d).join("rect")
         .attr("x", d => x(d.data.name)) 
         .attr("y", d => y(d[1]))
-        .attr("height", d => y(d[0]) - y(d[1]))
+        .attr("height", d => y(d[0]) - y(d[1])) // Ora questa altezza è proporzionale al valore %
         .attr("width", x.bandwidth());
 
+    // La logica di evidenziazione rimane invariata e funziona correttamente
     if (selectedNode?.attributes?.name) {
       const selectedName = selectedNode.attributes.name;
       bars.style("opacity", d => d.data.name === selectedName ? 1 : 0.3)
@@ -67,23 +86,17 @@ export default function StackedBarChart({ data, colorScale, margin = { top: 40, 
     
     g.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x)).selectAll("text").attr("transform", "rotate(-45)").style("text-anchor", "end");
 
-    
+    // L'asse Y ora mostra correttamente le percentuali
     g.append("g")
       .call(d3.axisLeft(y).ticks(5).tickFormat(d3.format(".0%")));
     
-    // --- Fine disegno grafico ---
-
-
-    // --- INIZIO LOGICA PER LEGGENDA CON FONT DINAMICO ---
-
-    // 1. Crea il gruppo principale per la legenda
+    // La logica per la legenda non cambia
     const legendGroup = svg.append("g")
       .attr("font-family", "sans-serif")
-      .attr("font-size", 10) // Dimensione di partenza del font
+      .attr("font-size", 10)
       .attr("text-anchor", "start")
-      .attr("transform", `translate(${margin.left}, 10)`); // Posiziona in alto
+      .attr("transform", `translate(${margin.left}, 10)`);
 
-    // 2. Crea tutti gli elementi della legenda
     const legendItems = legendGroup.selectAll("g")
       .data(keys)
       .join("g");
@@ -99,31 +112,23 @@ export default function StackedBarChart({ data, colorScale, margin = { top: 40, 
       .attr("dy", "0.32em")
       .text(d => d);
 
-    // 3. Misura la larghezza totale e posiziona inizialmente
     let totalLegendWidth = 0;
-    const legendPadding = 15; // Spazio tra gli elementi
+    const legendPadding = 15;
 
     legendItems.each(function() {
       const itemWidth = this.getBBox().width;
-      // Posiziona l'elemento corrente
       d3.select(this).attr("transform", `translate(${totalLegendWidth}, 0)`);
-      // Aggiorna la larghezza totale per il prossimo
       totalLegendWidth += itemWidth + legendPadding;
     });
 
     totalLegendWidth -= legendPadding;
 
-    // 4. Se la legenda è troppo larga, calcola il fattore di scala e riposiziona
     if (totalLegendWidth > width) {
       const scaleFactor = width / totalLegendWidth;
-      
-      // Applica la nuova dimensione del font al gruppo principale
       legendGroup.attr("font-size", 10 * scaleFactor);
-
-      // Ora che il font è più piccolo, ri-calcolare le posizioni
       let newCurrentX = 0;
       legendItems.each(function() {
-        const itemWidth = this.getBBox().width; // Ottieni la nuova larghezza (più piccola)
+        const itemWidth = this.getBBox().width;
         d3.select(this).attr("transform", `translate(${newCurrentX}, 0)`);
         newCurrentX += itemWidth + legendPadding;
       });
