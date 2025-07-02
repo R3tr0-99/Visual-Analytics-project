@@ -24,7 +24,7 @@ export default function PieChart({ data, title, colorScale: providedColorScale, 
         svg.selectAll("*").remove();
         return;
     }
-    // --- FINE MODIFICA ---
+   
 
     const { width: fullWidth, height: fullHeight } = containerRef.current.getBoundingClientRect();
     const width = fullWidth - margin.left - margin.right;
@@ -39,7 +39,7 @@ export default function PieChart({ data, title, colorScale: providedColorScale, 
 
     const colorScale = providedColorScale || d3.scaleOrdinal().domain(dataWithValues.map(d => d.label)).range(d3.schemeTableau10);
 
-    // Ora usiamo `dataWithValues` per generare il grafico
+   
     const pie = d3.pie().value(d => d.value).sort(null);
     const arc = d3.arc().innerRadius(0).outerRadius(radius);
 
@@ -57,7 +57,7 @@ export default function PieChart({ data, title, colorScale: providedColorScale, 
 
     // Le etichette vengono create solo per i dati con valori
     const labels = g.selectAll('text.label')
-      .data(pie(dataWithValues)) // <-- Usa i dati filtrati
+      .data(pie(dataWithValues)) 
       .join('text')
       .attr('class', 'label')
       .attr('transform', d => `translate(${labelArc.centroid(d)})`)
