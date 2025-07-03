@@ -1,104 +1,105 @@
 import { Box, Button } from "@mui/material";
-import { useEffect, useRef, useState } from "react";
-// Assumendo che d3 e la libreria radviz siano importate correttamente nel tuo progetto
-// Potrebbe essere necessario un import come 'import * as d3 from "d3";' se non è globale
+
+import { useEffect, useMemo, useRef, useState } from "react";
 import { minEffectivenessErrorHeuristic } from "../utils/arrangement"; 
 
 export default function RadvizChart(props) {
     const containerRef = useRef(null);
     const svgRef = useRef(null);
     const chartRef = useRef(null);
-    const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+    const [containerDims, setContainerDims] = useState({ width: 0, height: 0 });
 
-    const [selectedNodes, setSelectedNodes] = useState([]);
     const [nodeHovered, setNodeHovered] = useState(null);
     const [valoreRaggio, setValoreRaggio] = useState(0);
     const [type, setType] = useState("original");
     
-    const initialHeuristicApplied = useRef(false);
+    // Memorizza l'elemento DOM del nodo selezionato per gestirne lo stile
+    const selectedNodeElement = useRef(null);
 
-    // Effect #1: Eseguito UNA SOLA VOLTA per creare l'SVG e osservare il container
+    // Effect #1: Creazione SVG e osservazione del container
     useEffect(() => {
         if (!containerRef.current) return;
-
-        // Pulisce completamente il contenitore prima di creare l'SVG
         d3.select(containerRef.current).selectAll('*').remove();
-        
         svgRef.current = d3.select(containerRef.current).append('svg');
 
-        const observeTarget = containerRef.current;
         const resizeObserver = new ResizeObserver(entries => {
-            if (!entries || entries.length === 0) return;
+            if (!entries || !entries.length) return;
             const { width, height } = entries[0].contentRect;
-            setDimensions({ width, height });
+            setContainerDims({ width, height });
         });
         
-        resizeObserver.observe(observeTarget);
+        resizeObserver.observe(containerRef.current);
         
-        return () => {
-            resizeObserver.disconnect();
-            // Pulisce anche quando il componente viene smontato
-            if (containerRef.current) {
-                d3.select(containerRef.current).selectAll('*').remove();
-            }
-        };
+        return () => resizeObserver.disconnect();
     }, []);
 
-    // Effect #2: Eseguito per il disegno e l'aggiornamento del grafico
+   // Pre-processa i dati da visualizzare basandosi sulle features 
+    const radvizData = useMemo(() => {
+        if (!props.data || !props.features) return [];
+        // Crea un nuovo array di oggetti che contengono solo le features visibili + 'name'/'id'
+        return props.data.map(d => {
+            const newObj = {
+                name: d.name, // 'name'  per la comunicazione e le etichette
+                id: d.id,
+            };
+            props.features.forEach(feature => {
+                newObj[feature] = d[feature];
+            });
+            return newObj;
+        });
+    }, [props.data, props.features]);
+
+
+    // Effect #2: Disegno e aggiornamento del grafico
     useEffect(() => {
-        if (!props.data || !svgRef.current || dimensions.width === 0) {
-            // Se non ci sono dati, pulisce l'svg
+        if (radvizData.length === 0 || props.features.length < 2 || !svgRef.current || containerDims.width === 0) {
             if (svgRef.current) svgRef.current.selectAll('*').remove();
             return;
         }
 
-        const size = Math.min(dimensions.width, dimensions.height);
+        const size = Math.min(containerDims.width, containerDims.height);
         if (size <= 0) return;
-
-        // Assicuriamoci che ci sia solo un SVG nel contenitore
-        if (containerRef.current) {
-            const existingSvgs = d3.select(containerRef.current).selectAll('svg');
-            if (existingSvgs.size() > 1) {
-                // Se ci sono più SVG, rimuovi tutti tranne il primo
-                existingSvgs.nodes().slice(1).forEach(node => node.remove());
-                svgRef.current = d3.select(existingSvgs.node());
-            }
-        }
 
         if (!chartRef.current) {
             chartRef.current = d3.radviz();
 
-            let selectedNodeElement = null;
             chartRef.current.setFunctionClick((_, event) => {
                 const clickedEl = d3.select(event.target);
                 const data = event.target.__data__;
                 
-                if (selectedNodeElement && selectedNodeElement.node() === clickedEl.node()) {
+                // Se si clicca sullo stesso nodo, deselezionalo
+                if (selectedNodeElement.current && selectedNodeElement.current.node() === clickedEl.node()) {
+                    // Ripristina lo stile del nodo deselezionato
                     const rPrev = +clickedEl.attr('r-prev') || +clickedEl.attr('r-default') || 1;
                     clickedEl.classed('selected', false).attr('r', rPrev).attr('stroke', 'black').attr('stroke-width', 0.2).attr('r-prev', null);
-                    selectedNodeElement = null;
+                    
+                    selectedNodeElement.current = null;
                     setNodeHovered(null);
-                    setSelectedNodes([]);
+                    props.nodeSelectedChanged(null); //  Notifica all'App la deselezione con null
                     return;
                 }
                 
-                if (selectedNodeElement) {
-                    const prevEl = selectedNodeElement;
+                // Deseleziona il nodo precedente, se esiste
+                if (selectedNodeElement.current) {
+                    const prevEl = selectedNodeElement.current;
                     const rPrev = +prevEl.attr('r-prev') || +prevEl.attr('r-default') || 1;
                     prevEl.classed('selected', false).attr('r', rPrev).attr('stroke', 'black').attr('stroke-width', 0.2).attr('r-prev', null);
                 }
 
+                // Seleziona e evidenzia il nuovo nodo
                 const defaultR = +clickedEl.attr('r-default') || 1;
                 const currentR = +clickedEl.attr('r') || defaultR;
                 clickedEl.attr('r-prev', currentR).classed('selected', true).attr('r', defaultR * 2).attr('stroke', 'red').attr('stroke-width', 2).raise();
                 
-                selectedNodeElement = clickedEl;
+                selectedNodeElement.current = clickedEl;
                 setNodeHovered(data);
-                setSelectedNodes([data]);
+                //  Notifica all'App il NOME del nodo selezionato
+                props.nodeSelectedChanged(data.name); 
             });
         }
         
-        chartRef.current.data(props.data);
+        //  Passa i dati pre-filtrati e rimuovi la chiamata a .dimensions()
+        chartRef.current.data(radvizData);
 
         svgRef.current
             .attr('width', size)
@@ -106,31 +107,26 @@ export default function RadvizChart(props) {
             .style('margin', 'auto');
 
         svgRef.current.selectAll('*').remove();
-        
         svgRef.current.call(chartRef.current);
         
         d3.selectAll("circle.data_point").each(function () {
             const el = d3.select(this);
             const r = parseFloat(el.attr("r")) || 1;
             if (!el.attr("r-default")) el.attr("r-default", r);
-            el.attr("r-current", r);
         });
         
         if (type === "eemh") {
             const updated = minEffectivenessErrorHeuristic(chartRef.current.data());
             chartRef.current.updateRadviz(updated);
         } else if (type === "original") {
-            // Ripristina la configurazione originale del radviz
             chartRef.current.updateRadviz();
         }
 
-    }, [props.data, dimensions, type]);
+    }, [radvizData, props.features, containerDims, type, props.nodeSelectedChanged]); 
 
-    // Effect #3: Resetta lo stato quando i dati cambiano (es. cambio file)
+    // Effect #3: Reset quando cambiano i dati
     useEffect(() => {
-        initialHeuristicApplied.current = false;
-        resetSelectedNodes();
-        // Applica l'euristica al primo caricamento di un nuovo dataset
+        resetState();
         if(props.data && props.data.length > 0) {
             setType('eemh');
         } else {
@@ -138,80 +134,48 @@ export default function RadvizChart(props) {
         }
     }, [props.data]);
 
-    // Effects per propagare gli aggiornamenti di stato al componente padre (App.jsx)
+    // Effects per gli stati interni
     useEffect(() => { props.changeType(type); }, [type, props.changeType]);
-    useEffect(() => { props.nodeSelectedChanged(selectedNodes); }, [selectedNodes, props.nodeSelectedChanged]);
     useEffect(() => { props.hoveredNodeChanged(nodeHovered); }, [nodeHovered, props.hoveredNodeChanged]);
     
-    // Funzioni di interazione per i bottoni
-    function increaseRaggio() {
+    // Funzioni di interazione
+    const increaseRaggio = () => {
         if (chartRef.current && valoreRaggio < 5) {
             chartRef.current.increaseRadius();
-            setValoreRaggio((prev) => prev + 1);
+            setValoreRaggio(v => v + 1);
         }
     }
 
-    function decreaseRaggio() {
+    const decreaseRaggio = () => {
         if (chartRef.current && valoreRaggio > -5) {
             chartRef.current.decreaseRadius();
-            setValoreRaggio((prev) => prev - 1);
+            setValoreRaggio(v => v - 1);
         }
     }
 
-    function resetSelectedNodes() {
+    const resetState = () => {
         setType("original");
-        setSelectedNodes([]);
+        props.nodeSelectedChanged(null); // Notifica al genitore il reset
         setNodeHovered(null);
         setValoreRaggio(0);
         if (chartRef.current) {
             chartRef.current.setRadiusPoints(1);
-            // Forza il ridisegno completo per riavviare l'animazione
-            setTimeout(() => {
-                if (svgRef.current && chartRef.current) {
-                    svgRef.current.selectAll('*').remove();
-                    svgRef.current.call(chartRef.current);
-                    
-                    // Ripristina gli attributi dei punti
-                    d3.selectAll("circle.data_point").each(function () {
-                        const el = d3.select(this);
-                        const r = parseFloat(el.attr("r")) || 1;
-                        if (!el.attr("r-default")) el.attr("r-default", r);
-                        el.attr("r-current", r);
-                    });
-                }
-            }, 50);
         }
+        // Il re-render pilotato dal cambio di props/stato si occuperà di ridisegnare
     }
     
     return (
         <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Box
                 ref={containerRef}
-                sx={{
-                    width: '100%',
-                    flex: 1,
-                    minHeight: 0,
-                    display: 'flex',
-                    justifyContent: 'center', // Centra orizzontalmente
-                    alignItems: 'center',     // Centra verticalmente
-                }}
-            >
-                {/* L'SVG sarà perfettamente centrato nel contenitore */}
-            </Box>
+                sx={{ width: '100%', flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+            />
             
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: 'center', pt: 1, flexShrink: 0 }}>
                  <Button disabled={valoreRaggio >= 5} variant="outlined" onClick={increaseRaggio}>Raggio +</Button>
                  <Button disabled={valoreRaggio <= -5} variant="outlined" onClick={decreaseRaggio}>Raggio -</Button>
-                 <Button
-                    disabled={type === "eemh"}
-                    variant="outlined"
-                    onClick={() => setType("eemh")}
-                 >EEMH Heuristic</Button>
-                 <Button
-                    disabled={type === "original" && selectedNodes.length === 0}
-                    variant="outlined"
-                    onClick={resetSelectedNodes}
-                 >Reset</Button>
+                 <Button disabled={type === "eemh"} variant="outlined" onClick={() => setType("eemh")}>EEMH Heuristic</Button>
+                 <Button variant="outlined" onClick={resetState}>Reset</Button>
             </Box>
         </Box>
     );

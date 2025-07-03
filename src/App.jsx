@@ -3,12 +3,12 @@ import * as d3 from 'd3';
 import './App.css';
 import { 
   Typography, Box, ToggleButton, ToggleButtonGroup, Container, Slider, Modal, IconButton, Tooltip,
-  Accordion, AccordionSummary, AccordionDetails, Paper, Button
+  Accordion, AccordionSummary, AccordionDetails, Paper, Button, FormGroup, FormControlLabel, Checkbox
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SettingsIcon from '@mui/icons-material/Settings'; 
-import RadvizChart from './components/radvizChart';
+import RadvizChart from './components/RadvizChart'; // Importa il file corretto
 import RadarChart from './components/radarChart';
 import BarChart from './components/barChart';
 import StackedBarChart from './components/stackedBarChart';
@@ -34,7 +34,8 @@ function App() {
   const [selectedFile, setSelectedFile] = useState('');
   const [csvData, setCsvData] = useState([]);
   const [features, setFeatures] = useState([]);
-  const [selectedNodes, setSelectedNodes] = useState([]);
+  const [visibleFeatures, setVisibleFeatures] = useState([]);
+  const [selectedNodes, setSelectedNodes] = useState([]); // Fonte di verità per TUTTI i grafici
   const [hoveredNode, setHoveredNode] = useState(null);
   const [type, setType] = useState("original");
   const [numberOfRows, setNumberOfRows] = useState(0);
@@ -42,10 +43,6 @@ function App() {
   const pieChartRefs = useRef([]);
   const [isMenuOpen, setIsMenuOpen] = useState(true);
 
-  const handleZoom = (chartKey) => {
-    setZoomedChart(current => (current === chartKey ? null : chartKey));
-  };
-  
   useEffect(() => {
     fetch('/data/files.json')
       .then((res) => res.json())
@@ -55,32 +52,35 @@ function App() {
 
   useEffect(() => {
     if (!selectedFile) {
-      setCsvData([]); setFeatures([]); setNumberOfRows(0); return;
+      setCsvData([]); setFeatures([]); setVisibleFeatures([]); setNumberOfRows(0); setSelectedNodes([]); return;
     }
     const url = `/data/${selectedFile}`;
     d3.csv(url).then(rawData => {
       if (!rawData || rawData.length === 0) {
-        setCsvData([]); setFeatures([]); setNumberOfRows(0); return;
+        setCsvData([]); setFeatures([]); setVisibleFeatures([]); setNumberOfRows(0); return;
       }
       const filtered = rawData.filter(d => d.name && d.name.trim() !== '');
       const numericKeys = Object.keys(filtered[0] || {}).filter(k => k !== 'name' && !isNaN(parseFloat(filtered[0][k])));
+      
       const parsed = filtered.map((row, index) => {
         const copy = { ...row, id: `${row.name}-${index}` };
         numericKeys.forEach(k => { const num = +copy[k]; if (!isNaN(num)) copy[k] = num; });
         return copy;
       });
+
       setCsvData(parsed);
       setNumberOfRows(parsed.length);
       setFeatures(numericKeys);
+      setVisibleFeatures(numericKeys);
+      setSelectedNodes([]); // Resetta la selezione quando cambia il file
     }).catch(err => {
       console.error('Errore caricamento CSV:', err);
-      setCsvData([]); setFeatures([]); setNumberOfRows(0);
+      setCsvData([]); setFeatures([]); setVisibleFeatures([]); setNumberOfRows(0);
     });
   }, [selectedFile]);
 
   const slicedData = useMemo(() => {
     if (!csvData || csvData.length === 0) return [];
-    // Mostra le prime N righe, dove N è il valore dello slider
     const count = Math.min(Math.max(1, numberOfRows || 0), csvData.length);
     return csvData.slice(0, count);
   }, [csvData, numberOfRows]);
@@ -89,106 +89,90 @@ function App() {
     pieChartRefs.current = Array(slicedData.length).fill().map((_, i) => pieChartRefs.current[i] || createRef());
   }, [slicedData.length]);
 
+  // QUESTA FUNZIONE È IL CUORE DELLA COMUNICAZIONE E FUNZIONA CORRETTAMENTE
+  const handleNodeSelection = useCallback((nodeName) => {
+    if (nodeName === null) {
+        setSelectedNodes([]);
+        return;
+    }
+
+    const nodeToSelect = slicedData.find(node => node.name === nodeName);
+    if (!nodeToSelect) return;
+
+    const isAlreadySelected = selectedNodes.some(n => n.id === nodeToSelect.id);
+    if (isAlreadySelected) {
+      setSelectedNodes([]);
+    } else {
+      const selectionObject = {
+        ...nodeToSelect,
+        attributes: { name: nodeToSelect.name },
+        dimensions: Object.fromEntries(features.map(f => [f, nodeToSelect[f] ?? 0]))
+      };
+      setSelectedNodes([selectionObject]);
+    }
+  }, [slicedData, selectedNodes, features]);
+
   const handleBarClick = useCallback((clickedNodeName) => {
     const nodeIndex = slicedData.findIndex(node => node.name === clickedNodeName);
     if (nodeIndex !== -1 && pieChartRefs.current[nodeIndex]?.current) {
       pieChartRefs.current[nodeIndex].current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'nearest',
-        inline: 'center'
+        behavior: 'smooth', block: 'nearest', inline: 'center'
       });
     }
-    const nodeToSelect = slicedData.find(node => node.name === clickedNodeName);
-    if (nodeToSelect) {
-      const isAlreadySelected = selectedNodes.some(n => n.id === nodeToSelect.id);
-      if (isAlreadySelected && selectedNodes.length === 1) {
-        setSelectedNodes([]);
+    handleNodeSelection(clickedNodeName);
+  }, [slicedData, handleNodeSelection]);
+
+  const handleZoom = (chartKey) => setZoomedChart(current => (current === chartKey ? null : chartKey));
+  const hoveredNodeChanged = useCallback((node) => setHoveredNode(node), []);
+  const changeType = useCallback((typeTmp) => setType(typeTmp), []);
+  const handleRandomSelection = useCallback(() => {
+    if (csvData.length === 0) return;
+    setNumberOfRows(Math.floor(Math.random() * csvData.length) + 1);
+  }, [csvData.length]);
+
+  const handleFeatureToggle = useCallback((featureToToggle) => {
+    setVisibleFeatures(currentVisible => {
+      const isVisible = currentVisible.includes(featureToToggle);
+      if (isVisible) {
+        return currentVisible.length <= 2 ? currentVisible : currentVisible.filter(f => f !== featureToToggle);
       } else {
-        const radvizNodeStructure = {
-            ...nodeToSelect,
-            attributes: { name: nodeToSelect.name },
-            dimensions: Object.fromEntries(features.map(f => [f, nodeToSelect[f] ?? 0]))
-        };
-        setSelectedNodes([radvizNodeStructure]);
+        return [...currentVisible, featureToToggle];
       }
-    }
-  }, [slicedData, selectedNodes, features]);
+    });
+  }, []);
 
   const colorScale = useMemo(() => {
     if (features.length === 0) return null;
     return d3.scaleOrdinal().domain(features).range(d3.schemeTableau10);
   }, [features]);
 
-  const nodeSelectedChanged = useCallback((nodesSelected) => {
-    setSelectedNodes(nodesSelected);
-  }, []);
-
-  const hoveredNodeChanged = useCallback((node) => {
-    setHoveredNode(node);
-  }, []);
-
-  const changeType = useCallback((typeTmp) => {
-    setType(currentType => currentType !== typeTmp ? typeTmp : currentType);
-  }, []);
-  
-  // Funzione che imposta un numero casuale di righe
-  const handleRandomSelection = useCallback(() => {
-    if (csvData.length === 0) return;
-    // Genera un numero casuale tra 1 e il numero massimo di righe
-    const randomRowCount = Math.floor(Math.random() * csvData.length) + 1;
-    // Aggiorna lo stato, che a sua volta aggiornerà lo slider
-    setNumberOfRows(randomRowCount);
-  }, [csvData.length]);
-
-
   const chartComponents = {
-    radviz: <RadvizChart changeType={changeType} data={slicedData} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={nodeSelectedChanged} selectedNodes={selectedNodes} />,
-    bar: <BarChart hoveredNode={hoveredNode} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} features={features} colorScale={colorScale} />,
-    radar: <Box sx={{width: '100%', height: '100%'}}><RadarChart data={slicedData} features={features} type={type} /></Box>,
-    stacked: <StackedBarChart data={slicedData} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} onBarClick={handleBarClick} />,
+    radviz: <RadvizChart 
+              changeType={changeType} 
+              data={slicedData} 
+              features={visibleFeatures} // Passa le feature da visualizzare
+              hoveredNodeChanged={hoveredNodeChanged} 
+              nodeSelectedChanged={handleNodeSelection} // Passa la funzione per notificare i click
+            />,
+    bar: <BarChart hoveredNode={hoveredNode} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} features={visibleFeatures} colorScale={colorScale} />,
+    radar: <RadarChart data={slicedData} features={visibleFeatures} type={type} />,
+    stacked: <StackedBarChart data={slicedData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} onBarClick={handleBarClick} />,
     pie: (
       <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%', overflowX: 'auto', '&::-webkit-scrollbar': { height: '8px' }, '&::-webkit-scrollbar-thumb': { backgroundColor: '#ccc', borderRadius: '4px' } }}>
         {slicedData.map((node, index) => (
           <Box key={node.id} ref={pieChartRefs.current[index]} sx={{ minWidth: '300px', height: '100%', flexShrink: 0 }}>
-            <PieChart title={`Nodo: ${node.name || node.id}`} data={features.map(key => ({ label: key, value: node[key] }))} colorScale={colorScale} />
+            <PieChart title={`Nodo: ${node.name || node.id}`} data={visibleFeatures.map(key => ({ label: key, value: node[key] }))} colorScale={colorScale} />
           </Box>
         ))}
       </Box>
     )
   };
 
-
   return (
     <Box sx={{ display: 'flex', height: '100vh', width: '100vw' }}>
-      <Paper
-        elevation={4}
-        sx={{
-          width: isMenuOpen ? '350px' : '60px',
-          flexShrink: 0,
-          height: '100vh',
-          transition: 'width 0.3s ease',
-          overflow: 'hidden',
-          position: 'relative',
-          borderRadius: 0,
-        }}
-      >
-        <Accordion
-          expanded={isMenuOpen}
-          onChange={() => setIsMenuOpen(!isMenuOpen)}
-        >
-          <AccordionSummary
-            expandIcon={<ExpandMoreIcon />}
-            aria-controls="controls-panel-content"
-            id="controls-panel-header"
-            sx={{ 
-                height: '60px',
-                "& .MuiAccordionSummary-content": {
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.5,
-                }
-            }}
-          >
+      <Paper elevation={4} sx={{ width: isMenuOpen ? '350px' : '60px', flexShrink: 0, height: '100vh', transition: 'width 0.3s ease', overflow: 'hidden', position: 'relative', borderRadius: 0 }}>
+        <Accordion expanded={isMenuOpen} onChange={() => setIsMenuOpen(!isMenuOpen)} sx={{'::before': { display: 'none' }}}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls="controls-panel-content" id="controls-panel-header" sx={{ height: '60px', "& .MuiAccordionSummary-content": { display: 'flex', alignItems: 'center', gap: 1.5 }}}>
             <SettingsIcon />
             {isMenuOpen && <Typography variant="h6">Impostazioni</Typography>}
           </AccordionSummary>
@@ -196,23 +180,29 @@ function App() {
           <AccordionDetails sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
             <Box>
               <Typography variant="subtitle1" gutterBottom sx={{textAlign: 'center', mb: 1}}>Seleziona File CSV</Typography>
-              <ToggleButtonGroup 
-                value={selectedFile} 
-                exclusive 
-                onChange={(e, newValue) => { if (newValue !== null) setSelectedFile(newValue); }} 
-                aria-label="file selection"
-                orientation="vertical"
-              >
+              <ToggleButtonGroup value={selectedFile} exclusive onChange={(e, newValue) => { if (newValue !== null) setSelectedFile(newValue); }} aria-label="file selection" orientation="vertical">
                 {fileList.map((fileName) => (<ToggleButton sx={{textTransform: 'none'}} key={fileName} value={fileName} aria-label={fileName}>{fileName}</ToggleButton>))}
               </ToggleButtonGroup>
             </Box>
+            
+            {features.length > 0 && (
+                <Box sx={{ width: '90%' }}>
+                  <Typography variant="subtitle1" gutterBottom sx={{ textAlign: 'center', mb: 1 }}>Visualizza Dimensioni</Typography>
+                  <Paper variant="outlined" sx={{ maxHeight: 220, overflowY: 'auto', p: 1 }}>
+                    <FormGroup>
+                      {features.map((feature) => (
+                        <FormControlLabel key={feature} control={ <Checkbox checked={visibleFeatures.includes(feature)} onChange={() => handleFeatureToggle(feature)} name={feature} size="small" /> } label={<Typography variant="body2">{feature}</Typography>} />
+                      ))}
+                    </FormGroup>
+                  </Paper>
+                </Box>
+            )}
+
             {csvData.length > 0 && (
               <Box sx={{ width: '90%' }}>
                 <Typography id="tuple-slider" gutterBottom>Numero di Righe: {numberOfRows}</Typography>
                 <Slider aria-labelledby="tuple-slider" value={numberOfRows} onChange={(e, newValue) => setNumberOfRows(newValue)} min={1} max={csvData.length} valueLabelDisplay="auto" />
-                <Button variant="outlined" onClick={handleRandomSelection} fullWidth sx={{ mt: 4 }}>
-                  Selezione Random
-                </Button>
+                <Button variant="outlined" onClick={handleRandomSelection} fullWidth sx={{ mt: 2 }}>Selezione Random</Button>
               </Box>
             )}
           </AccordionDetails>
@@ -220,11 +210,9 @@ function App() {
       </Paper>
 
       <Container maxWidth={false} sx={{ flexGrow: 1, p: 2, height: '100%', boxSizing: 'border-box' }}>
-        {!selectedFile ? (
-          <Typography sx={{textAlign: 'center', mt: 4}}>Seleziona un file dal menu a sinistra per iniziare.</Typography>
-        ) : slicedData.length === 0 && selectedFile ? (
-          <Typography sx={{textAlign: 'center', mt: 4}}>Caricamento dati per {selectedFile}...</Typography>
-        ) : (
+        {!selectedFile ? (<Typography sx={{textAlign: 'center', mt: 4}}>Seleziona un file dal menu a sinistra per iniziare.</Typography>) : 
+        slicedData.length === 0 && selectedFile ? (<Typography sx={{textAlign: 'center', mt: 4}}>Caricamento dati per {selectedFile}...</Typography>) : 
+        (
           <Box sx={{ display: 'flex', height: '100%', width: '100%', gap: 2 }}>
             <Box sx={{ width: '45%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('radviz')} sx={{ width: '100%', height: '100%', p: 1, overflow: 'hidden', display:'flex' }}>{chartComponents.radviz}</Paper></Tooltip>
