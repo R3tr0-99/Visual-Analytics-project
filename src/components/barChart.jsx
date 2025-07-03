@@ -73,7 +73,7 @@ export default function BarChart(props) {
         .attr('text-anchor', 'middle')
         .style('font-size', '14px')
         .style('fill', '#888')
-        .text("Passa il mouse o seleziona un nodo");
+        .text("Per visualizare il barchart seleziona un nodo tramite Radviz o Stackedbarchart");
       return;
     }
     
@@ -82,7 +82,7 @@ export default function BarChart(props) {
     // Trova i dati corretti (originali se da Radviz, altrimenti diretti)
     const realDataNode = node.original || node;
 
-    // --- MODIFICA CHIAVE 1: Normalizza i dati per il 100% Bar Chart ---
+    
     // Calcola la somma di tutti i valori numerici per il nodo corrente
     const total = lastLabels.reduce((acc, feat) => {
         const val = +realDataNode[feat];

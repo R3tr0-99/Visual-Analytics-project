@@ -3,7 +3,7 @@ import * as d3 from 'd3';
 import './App.css';
 import { 
   Typography, Box, ToggleButton, ToggleButtonGroup, Container, Slider, Modal, IconButton, Tooltip,
-  Accordion, AccordionSummary, AccordionDetails, Paper
+  Accordion, AccordionSummary, AccordionDetails, Paper, Button
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -80,6 +80,7 @@ function App() {
 
   const slicedData = useMemo(() => {
     if (!csvData || csvData.length === 0) return [];
+    // Mostra le prime N righe, dove N è il valore dello slider
     const count = Math.min(Math.max(1, numberOfRows || 0), csvData.length);
     return csvData.slice(0, count);
   }, [csvData, numberOfRows]);
@@ -129,6 +130,16 @@ function App() {
   const changeType = useCallback((typeTmp) => {
     setType(currentType => currentType !== typeTmp ? typeTmp : currentType);
   }, []);
+  
+  // Funzione che imposta un numero casuale di righe
+  const handleRandomSelection = useCallback(() => {
+    if (csvData.length === 0) return;
+    // Genera un numero casuale tra 1 e il numero massimo di righe
+    const randomRowCount = Math.floor(Math.random() * csvData.length) + 1;
+    // Aggiorna lo stato, che a sua volta aggiornerà lo slider
+    setNumberOfRows(randomRowCount);
+  }, [csvData.length]);
+
 
   const chartComponents = {
     radviz: <RadvizChart changeType={changeType} data={slicedData} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={nodeSelectedChanged} selectedNodes={selectedNodes} />,
@@ -199,6 +210,9 @@ function App() {
               <Box sx={{ width: '90%' }}>
                 <Typography id="tuple-slider" gutterBottom>Numero di Righe: {numberOfRows}</Typography>
                 <Slider aria-labelledby="tuple-slider" value={numberOfRows} onChange={(e, newValue) => setNumberOfRows(newValue)} min={1} max={csvData.length} valueLabelDisplay="auto" />
+                <Button variant="outlined" onClick={handleRandomSelection} fullWidth sx={{ mt: 4 }}>
+                  Selezione Random
+                </Button>
               </Box>
             )}
           </AccordionDetails>
