@@ -1,18 +1,66 @@
 import { useCallback, useEffect, useMemo, useState, createRef, useRef } from 'react';
 import * as d3 from 'd3';
 import './App.css';
-import { 
+import {
   Typography, Box, ToggleButton, ToggleButtonGroup, Container, Slider, Modal, IconButton, Tooltip,
   Accordion, AccordionSummary, AccordionDetails, Paper, Button, FormGroup, FormControlLabel, Checkbox
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import SettingsIcon from '@mui/icons-material/Settings'; 
-import RadvizChart from './components/RadvizChart'; // Importa il file corretto
+import SettingsIcon from '@mui/icons-material/Settings';
+import RadvizChart from './components/RadvizChart';
 import RadarChart from './components/radarChart';
 import BarChart from './components/barChart';
 import StackedBarChart from './components/stackedBarChart';
 import PieChart from './components/pieChart';
+import InfoIcon from '@mui/icons-material/Info';
+
+
+// --- NUOVA FUNZIONE DI CLASSIFICAZIONE  ---
+
+const classifyCsvData = (data, features) => {
+  if (!data?.length || !features?.length) {
+    return 'Dati Insufficienti o Non Numerici';
+  }
+
+  let allInUnit = true;
+  let allSumsAre1 = true;
+  const epsilon = 1e-4;
+
+  for (const row of data) {
+    let sum = 0;
+
+    for (const f of features) {
+      const v = row[f];
+
+      if (typeof v !== 'number' || isNaN(v)) {
+        return 'Dati Non Partizionali'; // valore non numerico
+      }
+
+      if (v < 0 || v > 1) {
+        return 'Dati Non Partizionali'; // valore fuori [0,1]
+      }
+
+      sum += v;
+    }
+
+    // Se la somma non è circa 1, non è partizionale
+    if (Math.abs(sum - 1) > epsilon) {
+      allSumsAre1 = false;
+    }
+  }
+
+  if (allSumsAre1) {
+    return 'Dati Partizionali (valori in [0,1], somma righe ≈ 1)';
+  } else if (allInUnit) {
+    return 'Valori in [0,1] ma non partizionali';
+  } else {
+    return 'Impossibile classificare dai dati';
+  }
+};
+
+
+
 
 const modalStyle = {
   position: 'absolute',
@@ -35,13 +83,14 @@ function App() {
   const [csvData, setCsvData] = useState([]);
   const [features, setFeatures] = useState([]);
   const [visibleFeatures, setVisibleFeatures] = useState([]);
-  const [selectedNodes, setSelectedNodes] = useState([]); // Fonte di verità per TUTTI i grafici
+  const [selectedNodes, setSelectedNodes] = useState([]);
   const [hoveredNode, setHoveredNode] = useState(null);
   const [type, setType] = useState("original");
   const [numberOfRows, setNumberOfRows] = useState(0);
   const [zoomedChart, setZoomedChart] = useState(null);
   const pieChartRefs = useRef([]);
   const [isMenuOpen, setIsMenuOpen] = useState(true);
+  const [dataType, setDataType] = useState(null);
 
   useEffect(() => {
     fetch('/data/files.json')
@@ -52,12 +101,14 @@ function App() {
 
   useEffect(() => {
     if (!selectedFile) {
-      setCsvData([]); setFeatures([]); setVisibleFeatures([]); setNumberOfRows(0); setSelectedNodes([]); return;
+      setCsvData([]); setFeatures([]); setVisibleFeatures([]); setNumberOfRows(0); setSelectedNodes([]); setDataType(null);
+      return;
     }
     const url = `/data/${selectedFile}`;
     d3.csv(url).then(rawData => {
       if (!rawData || rawData.length === 0) {
-        setCsvData([]); setFeatures([]); setVisibleFeatures([]); setNumberOfRows(0); return;
+        setCsvData([]); setFeatures([]); setVisibleFeatures([]); setNumberOfRows(0); setDataType(null);
+        return;
       }
       const filtered = rawData.filter(d => d.name && d.name.trim() !== '');
       const numericKeys = Object.keys(filtered[0] || {}).filter(k => k !== 'name' && !isNaN(parseFloat(filtered[0][k])));
@@ -68,14 +119,17 @@ function App() {
         return copy;
       });
 
+      const detectedType = classifyCsvData(parsed, numericKeys);
+      setDataType(detectedType);
+
       setCsvData(parsed);
       setNumberOfRows(parsed.length);
       setFeatures(numericKeys);
       setVisibleFeatures(numericKeys);
-      setSelectedNodes([]); // Resetta la selezione quando cambia il file
+      setSelectedNodes([]);
     }).catch(err => {
       console.error('Errore caricamento CSV:', err);
-      setCsvData([]); setFeatures([]); setVisibleFeatures([]); setNumberOfRows(0);
+      setCsvData([]); setFeatures([]); setVisibleFeatures([]); setNumberOfRows(0); setDataType(null);
     });
   }, [selectedFile]);
 
@@ -89,7 +143,6 @@ function App() {
     pieChartRefs.current = Array(slicedData.length).fill().map((_, i) => pieChartRefs.current[i] || createRef());
   }, [slicedData.length]);
 
-  // QUESTA FUNZIONE È IL CUORE DELLA COMUNICAZIONE E FUNZIONA CORRETTAMENTE
   const handleNodeSelection = useCallback((nodeName) => {
     if (nodeName === null) {
         setSelectedNodes([]);
@@ -150,9 +203,9 @@ function App() {
     radviz: <RadvizChart 
               changeType={changeType} 
               data={slicedData} 
-              features={visibleFeatures} // Passa le feature da visualizzare
+              features={visibleFeatures}
               hoveredNodeChanged={hoveredNodeChanged} 
-              nodeSelectedChanged={handleNodeSelection} // Passa la funzione per notificare i click
+              nodeSelectedChanged={handleNodeSelection}
             />,
     bar: <BarChart hoveredNode={hoveredNode} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} features={visibleFeatures} colorScale={colorScale} />,
     radar: <RadarChart data={slicedData} features={visibleFeatures} type={type} />,
@@ -181,9 +234,37 @@ function App() {
             <Box>
               <Typography variant="subtitle1" gutterBottom sx={{textAlign: 'center', mb: 1}}>Seleziona File CSV</Typography>
               <ToggleButtonGroup value={selectedFile} exclusive onChange={(e, newValue) => { if (newValue !== null) setSelectedFile(newValue); }} aria-label="file selection" orientation="vertical">
-                {fileList.map((fileName) => (<ToggleButton sx={{textTransform: 'none'}} key={fileName} value={fileName} aria-label={fileName}>{fileName}</ToggleButton>))}
+                {fileList.map((fileName) => (<ToggleButton sx={{ textTransform: 'none' }} key={fileName} value={fileName} aria-label={fileName}>{fileName}</ToggleButton>))}
               </ToggleButtonGroup>
             </Box>
+
+            {dataType && (
+              <Box
+                sx={{
+                  width: '90%',
+                  textAlign: 'center',
+                  p: 2,
+                  bgcolor: '#f0f4ff',
+                  border: '1px solid #90caf9',
+                  borderRadius: 2,
+                  boxShadow: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 1,
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <InfoIcon color="info" />
+                  <Typography variant="subtitle1" component="div" fontWeight={600}>
+                    Proprietà Dati Rilevate
+                  </Typography>
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  {dataType}
+                </Typography>
+              </Box>
+            )}
             
             {features.length > 0 && (
                 <Box sx={{ width: '90%' }}>
