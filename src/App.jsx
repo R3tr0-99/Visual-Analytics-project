@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, createRef, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, createRef, useRef, Fragment } from 'react'; // --- MODIFICA: Importato Fragment
 import * as d3 from 'd3';
 
 import {
   Typography, Box, ToggleButton, ToggleButtonGroup, Container, Slider, Modal, IconButton, Tooltip,
-  Paper, Button, FormGroup, FormControlLabel, Checkbox
+  Paper, Button, FormGroup, FormControlLabel, Checkbox, Divider
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -15,29 +15,56 @@ import StackedBarChart from './components/stackedBarChart';
 import PieChart from './components/pieChart';
 import InfoIcon from '@mui/icons-material/Info';
 
+// --- MODIFICA: Importa il contenuto testuale dal file JSON ---
+import infoContent from './data-types-info.json';
 
 // --- FUNZIONE DI CLASSIFICAZIONE 
+// Sostituisci la vecchia funzione in App.jsx con questa
 const classifyCsvData = (data, features) => {
   if (!data?.length || !features?.length) {
-    return 'Dati Insufficienti o Non Numerici';
+    return 'insufficienti';
   }
+
   const epsilon = 1e-4;
+  let allRowsArePartitional = true;
+  let allValuesIn01 = true;
+
   for (const row of data) {
     let sum = 0;
     for (const f of features) {
       const v = row[f];
+      // Se anche un solo valore è fuori da [0,1], i dati sono generici (Caso 1, 2, 3)
       if (typeof v !== 'number' || isNaN(v) || v < 0 || v > 1) {
-        return 'Dati Non Partizionali';
+        // In un'implementazione reale, qui potremmo distinguere tra Caso 1, 2, 3
+        // ma per l'utente finale l'impatto è lo stesso: dati generici.
+        return 'Caso 1-2-3-4 - Generici ';
       }
       sum += v;
     }
+    // Se una riga ha valori in [0,1] ma la somma non è 1, non è partizionale
     if (Math.abs(sum - 1) > epsilon) {
-      return 'Valori in [0,1] ma non partizionali';
+      allRowsArePartitional = false;
     }
   }
-  return 'Dati Partizionali (valori in [0,1], somma righe ≈ 1)';
-};
 
+  // A questo punto, sappiamo che tutti i valori sono in [0,1].
+  
+  // Caso 6: Tutti i valori in [0,1] E la somma di ogni riga è 1
+  if (allRowsArePartitional) {
+    return 'Caso 6 - Partizionali';
+  }
+  
+  // Caso 5: Tutti i valori in [0,1], ma non tutte le somme sono 1
+  return ' Caso 5 - Dominio 01';
+
+  // Nota: Il 'dominio_comune' (Caso 4) è più difficile da rilevare
+  // automaticamente senza metadati, perché richiede di sapere se semanticamente
+  // le colonne condividono una scala (es. "voto di esame"). La nostra logica
+  // attuale classifica i dati basandosi solo sui valori, quindi non può distinguere
+  // il Caso 4 dal Caso 1/2/3. Per questo, l'ID 'dominio_comune' non verrà mai 
+  // restituito da questa funzione, ma lo teniamo nel JSON per completezza teorica.
+};
+// Stile per i modali dei grafici
 const modalStyle = {
   position: 'absolute',
   top: '50%',
@@ -53,6 +80,24 @@ const modalStyle = {
   flexDirection: 'column',
 };
 
+// Stile specifico per il modale informativo
+const infoModalStyle = {
+  position: 'absolute',
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)',
+  width: { xs: '90vw', md: '60vw' },
+  maxWidth: '750px',
+  bgcolor: 'background.paper',
+  border: '2px solid #000',
+  boxShadow: 24,
+  p: 4,
+  borderRadius: '15px',
+  maxHeight: '90vh',
+  overflowY: 'auto',
+};
+
+
 function App() {
   const [fileList, setFileList] = useState([]);
   const [selectedFile, setSelectedFile] = useState('');
@@ -65,8 +110,10 @@ function App() {
   const [numberOfRows, setNumberOfRows] = useState(0);
   const [zoomedChart, setZoomedChart] = useState(null);
   const pieChartRefs = useRef([]);
-  const [isMenuOpen, setIsMenuOpen] = useState(true); // Stato per il pannello laterale
+  const [isMenuOpen, setIsMenuOpen] = useState(true);
   const [dataType, setDataType] = useState(null);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+
 
   useEffect(() => {
     fetch('/data/files.json')
@@ -182,15 +229,8 @@ function App() {
     return d3.scaleOrdinal().domain(features).range(d3.schemeTableau10);
   }, [features]);
   
-  // -- DEFINIZIONE DEI COMPONENTI GRAFICO --
   const chartComponents = {
-    radviz: <RadvizChart 
-              changeType={changeType} 
-              data={slicedData} 
-              features={visibleFeatures}
-              hoveredNodeChanged={hoveredNodeChanged} 
-              nodeSelectedChanged={handleNodeSelection}
-            />,
+    radviz: <RadvizChart changeType={changeType} data={slicedData} features={visibleFeatures} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={handleNodeSelection}/>,
     bar: <BarChart hoveredNode={hoveredNode} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} features={visibleFeatures} colorScale={colorScale} />,
     radar: <RadarChart data={slicedData} features={visibleFeatures} type={type} />,
     stacked: <StackedBarChart data={slicedData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} onBarClick={handleBarClick} />,
@@ -218,24 +258,13 @@ function App() {
           overflowX: 'hidden',
           overflowY: 'auto',
           position: 'relative', 
-          // --- MODIFICA: Arrotonda solo gli angoli a destra per un look più pulito ---
           borderRadius: '0 15px 15px 0',
           display: 'flex',
           flexDirection: 'column',
           boxSizing: 'border-box'
         }}
       >
-        {/* Header del Pannello */}
-        <Box 
-          sx={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            p: '0 8px 0 16px', 
-            height: '60px', 
-            flexShrink: 0,
-          }}
-        >
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: '0 8px 0 16px', height: '60px', flexShrink: 0, }}>
           {isMenuOpen && (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, overflow: 'hidden', whiteSpace: 'nowrap' }}>
               <SettingsIcon />
@@ -247,7 +276,6 @@ function App() {
           </IconButton>
         </Box>
 
-        {/* Contenuto del Pannello (visibile solo se aperto) */}
         {isMenuOpen && (
           <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', flexGrow: 1 }}>
             <Box sx={{width: '100%'}}>
@@ -260,7 +288,11 @@ function App() {
             {dataType && (
               <Paper variant="outlined" sx={{ width: '90%', textAlign: 'center', p: 2, bgcolor: 'action.hover', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <InfoIcon color="info" />
+                  <Tooltip title="Spiegazione Tipi di Dati">
+                    <IconButton onClick={() => setIsInfoModalOpen(true)} size="small">
+                      <InfoIcon color="info" />
+                    </IconButton>
+                  </Tooltip>
                   <Typography variant="subtitle1" component="div" fontWeight={600}>Proprietà Dati</Typography>
                 </Box>
                 <Typography variant="body2" color="text.secondary">{dataType}</Typography>
@@ -291,7 +323,6 @@ function App() {
         )}
       </Paper>
 
-      {/* AREA CONTENUTO PRINCIPALE */}
       <Container maxWidth={false} sx={{ flexGrow: 1, p: 2, height: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
         {!selectedFile ? (<Typography sx={{ textAlign: 'center', mt: 4 }}>Seleziona un file dal menu per iniziare.</Typography>) : 
         slicedData.length === 0 && selectedFile ? (<Typography sx={{ textAlign: 'center', mt: 4 }}>Caricamento dati per {selectedFile}...</Typography>) : 
@@ -318,6 +349,34 @@ function App() {
         <Box sx={modalStyle}>
           <IconButton aria-label="close" onClick={() => handleZoom(null)} sx={{ position: 'absolute', right: 8, top: 8, zIndex: 1, color: (theme) => theme.palette.grey[500], }}><CloseIcon /></IconButton>
           {zoomedChart && chartComponents[zoomedChart]}
+        </Box>
+      </Modal>
+
+      <Modal open={isInfoModalOpen} onClose={() => setIsInfoModalOpen(false)} aria-labelledby="info-modal-title">
+        <Box sx={infoModalStyle}>
+          <IconButton aria-label="close" onClick={() => setIsInfoModalOpen(false)} sx={{ position: 'absolute', right: 8, top: 8, color: (theme) => theme.palette.grey[500] }}>
+            <CloseIcon />
+          </IconButton>
+          <Typography id="info-modal-title" variant="h5" component="h2" gutterBottom>
+            Spiegazione dei Tipi di Dati
+          </Typography>
+          
+          {/* --- MODIFICA: Contenuto del modale generato dinamicamente --- */}
+          <Box id="info-modal-description" sx={{ mt: 2 }}>
+            {infoContent.map((item, index) => (
+              <Fragment key={item.id}>
+                <Typography variant="h6" component="h3" sx={{ fontWeight: 'bold' }}>
+                  {item.title}
+                </Typography>
+                <Typography variant="body1" color="text.secondary">
+                  {item.description}
+                </Typography>
+                {/* Aggiunge il divisore ovunque tranne che dopo l'ultimo elemento */}
+                {index < infoContent.length - 1 && <Divider sx={{ my: 2 }} />}
+              </Fragment>
+            ))}
+          </Box>
+
         </Box>
       </Modal>
     </Box>

@@ -4,7 +4,7 @@ import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import App from './App.jsx';
 import './index.css';
 
-// --- TEMA AGGIORNATO E COMPLETO ---
+
 const modernTheme = createTheme({
   shape: {
     borderRadius: 15, // Bordi più morbidi
