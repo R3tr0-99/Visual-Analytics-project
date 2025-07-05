@@ -1,27 +1,37 @@
 [
   {
     "id": "partizionali",
-    "title": "Dati Partizionali (Scenario Ideale)",
-    "description": "Qui siamo nello scenario perfetto per RadViz. Ogni riga di dati si comporta come una torta divisa in fette: i valori sono tra 0 e 1 e la loro somma fa esattamente 1. Il grande vantaggio è che il grafico che vedi è una rappresentazione fedele e non distorta della realtà. Puoi fidarti delle posizioni per analizzare con precisione le proporzioni tra le varie dimensioni, come nel caso di quote di mercato o risultati di un'elezione."
+    "title": "Caso 6: Dati Partizionali (Ideale)",
+    "description": "I dati sono in [0,1] e la loro somma per riga è 1. Rappresentazione fedele delle proporzioni."
   },
   {
     "id": "dominio_01",
-    "title": "Dati in [0,1] (Alta Affidabilità)",
-    "description": "In questo caso, i dati sono già 'pronti' per RadViz, con tutti i valori compresi tra 0 e 1. A differenza dello scenario ideale, qui la somma per riga non deve fare 1. È un'ottima notizia, perché significa che non viene applicata alcuna normalizzazione che possa distorcere il risultato. Il grafico mostrerà in modo affidabile quale dimensione domina sulle altre, ma ricorda che non stai analizzando proporzioni."
+    "title": "Caso 5: Dati in [0,1] (Alta Affidabilità)",
+    "description": "I valori sono già nell'intervallo [0,1]. Nessuna distorsione da normalizzazione."
   },
   {
     "id": "dominio_comune",
-    "title": "Dati con Scala Comune (Buono per Confronti)",
-    "description": "Questo scenario si verifica quando tutti gli attributi condividono la stessa scala di valori (ad esempio, i voti di diversi esami, tutti da 18 a 30). In questo caso, il grafico ha un grande pregio: preserva l'ordine. Se un punto è più vicino all'ancora 'Analisi' rispetto a 'Geometria', puoi fidarti che il voto di Analisi è superiore. È perfetto per analisi comparative, ma attenzione: per far rientrare tutto, i valori vengono normalizzati e si perde la percezione delle grandezze assolute."
+    "title": "Caso 4: Dominio Comune e Fisso (Buono)",
+    "description": "Gli attributi condividono una scala comune (es. voti [18,30]). L'ordine relativo è preservato."
   },
   {
-    "id": "generici",
-    "title": "Dati Generici (Da Usare con Cautela)",
-    "description": "Questo è il caso più comune, ma anche il più delicato. Si verifica quando i  dati hanno colonne con scale e unità di misura diverse (es. prezzo, età, peso). Per essere visualizzato, ogni attributo viene normalizzato in modo indipendente. Fai attenzione: questo processo può creare illusioni ottiche. Un punto può sembrare vicino a un'ancora solo perché la sua scala originale era molto diversa dalle altre. Usa questa vista per un'analisi esplorativa, ma evita di trarre conclusioni quantitative precise."
+    "id": "domini_fissati",
+    "title": "Caso 3: Domini Diversi ma Fissati (Stabile)",
+    "description": "Attributi con scale diverse ma stabili (es. specifiche tecniche). La visualizzazione è consistente, ma i confronti quantitativi sono solo indicativi."
+  },
+  {
+    "id": "unconstrained_positive",
+    "title": "Caso 2: Dati Positivi Non Correlati (Instabile)",
+    "description": "Attributi con scale diverse e range dinamici, ma tutti positivi. L'aggiunta di dati può alterare l'intera visualizzazione. Usare con cautela."
+  },
+  {
+    "id": "unconstrained",
+    "title": "Caso 1: Dati Generici (Massima Cautela)",
+    "description": "Il caso più problematico, con valori anche negativi. La normalizzazione rende i confronti inaffidabili."
   },
   {
     "id": "insufficienti",
-    "title": "Dati Mancanti o non Validi",
-    "description": "Non è stato possibile analizzare il file. Potrebbe essere vuoto, non contenere dati numerici validi, oppure si è verificato un errore durante il caricamento."
+    "title": "Dati Insufficienti o Non Validi",
+    "description": "Il file non può essere processato."
   }
 ]

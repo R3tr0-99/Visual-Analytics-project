@@ -1,70 +1,29 @@
-import { useCallback, useEffect, useMemo, useState, createRef, useRef, Fragment } from 'react'; // --- MODIFICA: Importato Fragment
-import * as d3 from 'd3';
+import { useCallback, useEffect, useMemo, useState, createRef, useRef, Fragment } from 'react';
 
+// --- Import dei Componenti UI ---
 import {
   Typography, Box, ToggleButton, ToggleButtonGroup, Container, Slider, Modal, IconButton, Tooltip,
-  Paper, Button, FormGroup, FormControlLabel, Checkbox, Divider
+  Paper, Button, FormGroup, FormControlLabel, Checkbox, Divider, CircularProgress, Chip
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import InfoIcon from '@mui/icons-material/Info';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
+
+// --- Import dei Componenti Grafico ---
 import RadvizChart from './components/RadvizChart';
 import RadarChart from './components/radarChart';
 import BarChart from './components/barChart';
 import StackedBarChart from './components/stackedBarChart';
 import PieChart from './components/pieChart';
-import InfoIcon from '@mui/icons-material/Info';
 
-// --- MODIFICA: Importa il contenuto testuale dal file JSON ---
+// --- Import dei Servizi e Contenuti Esterni ---
 import infoContent from './data-types-info.json';
+import { loadAndClassifyData } from './services/dataClassifier.js';
+import { runApiTest } from './services/apiTest.jsx'; 
 
-// --- FUNZIONE DI CLASSIFICAZIONE 
-// Sostituisci la vecchia funzione in App.jsx con questa
-const classifyCsvData = (data, features) => {
-  if (!data?.length || !features?.length) {
-    return 'insufficienti';
-  }
-
-  const epsilon = 1e-4;
-  let allRowsArePartitional = true;
-  let allValuesIn01 = true;
-
-  for (const row of data) {
-    let sum = 0;
-    for (const f of features) {
-      const v = row[f];
-      // Se anche un solo valore è fuori da [0,1], i dati sono generici (Caso 1, 2, 3)
-      if (typeof v !== 'number' || isNaN(v) || v < 0 || v > 1) {
-        // In un'implementazione reale, qui potremmo distinguere tra Caso 1, 2, 3
-        // ma per l'utente finale l'impatto è lo stesso: dati generici.
-        return 'Caso 1-2-3-4 - Generici ';
-      }
-      sum += v;
-    }
-    // Se una riga ha valori in [0,1] ma la somma non è 1, non è partizionale
-    if (Math.abs(sum - 1) > epsilon) {
-      allRowsArePartitional = false;
-    }
-  }
-
-  // A questo punto, sappiamo che tutti i valori sono in [0,1].
-  
-  // Caso 6: Tutti i valori in [0,1] E la somma di ogni riga è 1
-  if (allRowsArePartitional) {
-    return 'Caso 6 - Partizionali';
-  }
-  
-  // Caso 5: Tutti i valori in [0,1], ma non tutte le somme sono 1
-  return ' Caso 5 - Dominio 01';
-
-  // Nota: Il 'dominio_comune' (Caso 4) è più difficile da rilevare
-  // automaticamente senza metadati, perché richiede di sapere se semanticamente
-  // le colonne condividono una scala (es. "voto di esame"). La nostra logica
-  // attuale classifica i dati basandosi solo sui valori, quindi non può distinguere
-  // il Caso 4 dal Caso 1/2/3. Per questo, l'ID 'dominio_comune' non verrà mai 
-  // restituito da questa funzione, ma lo teniamo nel JSON per completezza teorica.
-};
-// Stile per i modali dei grafici
+// --- Stili per i Modali ---
 const modalStyle = {
   position: 'absolute',
   top: '50%',
@@ -79,8 +38,6 @@ const modalStyle = {
   display: 'flex',
   flexDirection: 'column',
 };
-
-// Stile specifico per il modale informativo
 const infoModalStyle = {
   position: 'absolute',
   top: '50%',
@@ -99,6 +56,7 @@ const infoModalStyle = {
 
 
 function App() {
+  // --- Gestione dello Stato del Componente ---
   const [fileList, setFileList] = useState([]);
   const [selectedFile, setSelectedFile] = useState('');
   const [csvData, setCsvData] = useState([]);
@@ -111,50 +69,74 @@ function App() {
   const [zoomedChart, setZoomedChart] = useState(null);
   const pieChartRefs = useRef([]);
   const [isMenuOpen, setIsMenuOpen] = useState(true);
-  const [dataType, setDataType] = useState(null);
+  const [dataTypeId, setDataTypeId] = useState(null);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [isClassifying, setIsClassifying] = useState(false);
+  const [classifiedByAI, setClassifiedByAI] = useState(false);
 
+  // useRef per assicurare che il test API venga eseguito una sola volta
+  const apiTestRun = useRef(false);
 
+  // --- Hook per il Test dell'API (eseguito solo una volta in sviluppo) ---
+  useEffect(() => {
+    if (import.meta.env.DEV && !apiTestRun.current) {
+      runApiTest();
+      apiTestRun.current = true; // Imposta il flag per prevenire esecuzioni future
+    }
+  }, []);
+
+  // --- Hook per Caricare la Lista dei File disponibili ---
   useEffect(() => {
     fetch('/data/files.json')
       .then((res) => res.json())
       .then((lista) => setFileList(lista))
-      .catch((err) => console.error(err));
+      .catch((err) => console.error("Errore nel caricamento di files.json:", err));
   }, []);
-
+  
+  // --- Hook Principale: Carica e Classifica i Dati quando un file viene selezionato ---
   useEffect(() => {
     if (!selectedFile) {
-      setCsvData([]); setFeatures([]); setVisibleFeatures([]); setNumberOfRows(0); setSelectedNodes([]); setDataType(null);
+      setCsvData([]);
+      setFeatures([]);
+      setDataTypeId(null);
+      setClassifiedByAI(false);
       return;
     }
-    const url = `/data/${selectedFile}`;
-    d3.csv(url).then(rawData => {
-      if (!rawData || rawData.length === 0) {
-        setCsvData([]); setFeatures([]); setVisibleFeatures([]); setNumberOfRows(0); setDataType(null);
-        return;
+
+    const processFile = async () => {
+      setIsClassifying(true);
+      setDataTypeId(null);
+      setClassifiedByAI(false);
+
+      try {
+        const { parsedData, features, dataTypeId, classifiedByAI } = await loadAndClassifyData(selectedFile);
+        
+        setCsvData(parsedData);
+        setFeatures(features);
+        setVisibleFeatures(features);
+        setNumberOfRows(parsedData.length);
+        setSelectedNodes([]);
+        setDataTypeId(dataTypeId);
+        setClassifiedByAI(classifiedByAI);
+
+      } catch (error) {
+        console.error("Errore durante il processo di caricamento:", error);
+        setDataTypeId('insufficienti');
+        setCsvData([]);
+        setFeatures([]);
+      } finally {
+        setIsClassifying(false);
       }
-      const filtered = rawData.filter(d => d.name && d.name.trim() !== '');
-      const numericKeys = Object.keys(filtered[0] || {}).filter(k => k !== 'name' && !isNaN(parseFloat(filtered[0][k])));
-      
-      const parsed = filtered.map((row, index) => {
-        const copy = { ...row, id: `${row.name}-${index}` };
-        numericKeys.forEach(k => { const num = +copy[k]; if (!isNaN(num)) copy[k] = num; });
-        return copy;
-      });
+    };
 
-      const detectedType = classifyCsvData(parsed, numericKeys);
-      setDataType(detectedType);
-
-      setCsvData(parsed);
-      setNumberOfRows(parsed.length);
-      setFeatures(numericKeys);
-      setVisibleFeatures(numericKeys);
-      setSelectedNodes([]);
-    }).catch(err => {
-      console.error('Errore caricamento CSV:', err);
-      setCsvData([]); setFeatures([]); setVisibleFeatures([]); setNumberOfRows(0); setDataType(null);
-    });
+    processFile();
   }, [selectedFile]);
+
+  // --- Valori Derivati e Memoizzati ---
+  const currentDataTypeInfo = useMemo(() => {
+    if (!dataTypeId) return null;
+    return infoContent.find(item => item.id === dataTypeId);
+  }, [dataTypeId]);
 
   const slicedData = useMemo(() => {
     if (!csvData || csvData.length === 0) return [];
@@ -165,45 +147,47 @@ function App() {
   useEffect(() => {
     pieChartRefs.current = Array(slicedData.length).fill().map((_, i) => pieChartRefs.current[i] || createRef());
   }, [slicedData.length]);
+  
+  const colorScale = useMemo(() => {
+    if (features.length === 0) return null;
+    return d3.scaleOrdinal().domain(features).range(d3.schemeTableau10);
+  }, [features]);
 
+  // --- Callback per l'Interattività ---
   const handleNodeSelection = useCallback((nodeName) => {
-    if (nodeName === null) {
-        setSelectedNodes([]);
-        return;
-    }
-
+    if (nodeName === null) { setSelectedNodes([]); return; }
     const nodeToSelect = slicedData.find(node => node.name === nodeName);
     if (!nodeToSelect) return;
-
     const isAlreadySelected = selectedNodes.some(n => n.id === nodeToSelect.id);
     if (isAlreadySelected) {
       setSelectedNodes([]);
     } else {
-      const selectionObject = {
-        ...nodeToSelect,
-        attributes: { name: nodeToSelect.name },
-        dimensions: Object.fromEntries(features.map(f => [f, nodeToSelect[f] ?? 0]))
-      };
+      const selectionObject = { ...nodeToSelect, attributes: { name: nodeToSelect.name }, dimensions: Object.fromEntries(features.map(f => [f, nodeToSelect[f] ?? 0])) };
       setSelectedNodes([selectionObject]);
     }
   }, [slicedData, selectedNodes, features]);
 
+  // --- MODIFICA CHIAVE QUI ---
   const handleBarClick = useCallback((clickedNodeName) => {
-    handleNodeSelection(clickedNodeName);
-
-    if (zoomedChart) {
-      handleZoom(null);
+    // 1. Chiudi il pannello laterale se è aperto
+    if (isMenuOpen) {
+      setIsMenuOpen(false);
     }
-
+    
+    // 2. Seleziona il nodo (logica esistente)
+    handleNodeSelection(clickedNodeName);
+    
+    // 3. Chiudi il modale se un grafico è ingrandito (logica esistente)
+    if (zoomedChart) { handleZoom(null); }
+    
+    // 4. Esegui lo scroll verso il grafico a torta corrispondente (logica esistente)
     setTimeout(() => {
       const nodeIndex = slicedData.findIndex(node => node.name === clickedNodeName);
       if (nodeIndex !== -1 && pieChartRefs.current[nodeIndex]?.current) {
-        pieChartRefs.current[nodeIndex].current.scrollIntoView({
-          behavior: 'smooth', block: 'nearest', inline: 'center'
-        });
+        pieChartRefs.current[nodeIndex].current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
-    }, 100); 
-  }, [slicedData, handleNodeSelection, zoomedChart]);
+    }, 100); // Ritardo per permettere la transizione di chiusura del pannello
+  }, [slicedData, handleNodeSelection, zoomedChart, isMenuOpen]); // Aggiungi isMenuOpen alle dipendenze
 
   const handleZoom = (chartKey) => setZoomedChart(current => (current === chartKey ? null : chartKey));
   const hoveredNodeChanged = useCallback((node) => setHoveredNode(node), []);
@@ -224,11 +208,7 @@ function App() {
     });
   }, []);
 
-  const colorScale = useMemo(() => {
-    if (features.length === 0) return null;
-    return d3.scaleOrdinal().domain(features).range(d3.schemeTableau10);
-  }, [features]);
-  
+  // --- Definizione dei Componenti Grafico da Renderizzare ---
   const chartComponents = {
     radviz: <RadvizChart changeType={changeType} data={slicedData} features={visibleFeatures} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={handleNodeSelection}/>,
     bar: <BarChart hoveredNode={hoveredNode} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} features={visibleFeatures} colorScale={colorScale} />,
@@ -245,35 +225,13 @@ function App() {
     )
   };
 
+  // --- JSX per il Rendering ---
   return (
     <Box sx={{ display: 'flex', height: '100vh', width: '100vw', bgcolor: 'background.default' }}>
-      
-      <Paper 
-        elevation={4} 
-        sx={{ 
-          width: isMenuOpen ? '350px' : '60px', 
-          flexShrink: 0, 
-          height: '100vh', 
-          transition: 'width 0.3s ease', 
-          overflowX: 'hidden',
-          overflowY: 'auto',
-          position: 'relative', 
-          borderRadius: '0 15px 15px 0',
-          display: 'flex',
-          flexDirection: 'column',
-          boxSizing: 'border-box'
-        }}
-      >
+      <Paper elevation={4} sx={{ width: isMenuOpen ? '350px' : '60px', flexShrink: 0, height: '100vh', transition: 'width 0.3s ease', overflowX: 'hidden', overflowY: 'auto', position: 'relative', borderRadius: '0 15px 15px 0', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: '0 8px 0 16px', height: '60px', flexShrink: 0, }}>
-          {isMenuOpen && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, overflow: 'hidden', whiteSpace: 'nowrap' }}>
-              <SettingsIcon />
-              <Typography variant="h6">Impostazioni</Typography>
-            </Box>
-          )}
-          <IconButton onClick={() => setIsMenuOpen(!isMenuOpen)} sx={{ ml: isMenuOpen ? 1 : 0 }}>
-            {isMenuOpen ? <ChevronLeftIcon /> : <SettingsIcon />}
-          </IconButton>
+          {isMenuOpen && ( <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, overflow: 'hidden', whiteSpace: 'nowrap' }}> <SettingsIcon /> <Typography variant="h6">Impostazioni</Typography> </Box> )}
+          <IconButton onClick={() => setIsMenuOpen(!isMenuOpen)} sx={{ ml: isMenuOpen ? 1 : 0 }}> {isMenuOpen ? <ChevronLeftIcon /> : <SettingsIcon />} </IconButton>
         </Box>
 
         {isMenuOpen && (
@@ -285,17 +243,30 @@ function App() {
               </ToggleButtonGroup>
             </Box>
 
-            {dataType && (
+            {isClassifying ? (
+              <Paper variant="outlined" sx={{ width: '90%', p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, bgcolor: 'action.hover' }}>
+                <CircularProgress size={24} />
+                <Typography variant="body2" color="text.secondary">Classificazione dati...</Typography>
+              </Paper>
+            ) : currentDataTypeInfo && (
               <Paper variant="outlined" sx={{ width: '90%', textAlign: 'center', p: 2, bgcolor: 'action.hover', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Tooltip title="Spiegazione Tipi di Dati">
-                    <IconButton onClick={() => setIsInfoModalOpen(true)} size="small">
-                      <InfoIcon color="info" />
-                    </IconButton>
+                    <IconButton onClick={() => setIsInfoModalOpen(true)} size="small"> <InfoIcon color="info" /> </IconButton>
                   </Tooltip>
                   <Typography variant="subtitle1" component="div" fontWeight={600}>Proprietà Dati</Typography>
                 </Box>
-                <Typography variant="body2" color="text.secondary">{dataType}</Typography>
+                <Typography variant="body2" color="text.secondary">{currentDataTypeInfo.title}</Typography>
+                {classifiedByAI && (
+                  <Chip
+                    icon={<SmartToyOutlinedIcon fontSize="small" />}
+                    label="Classificato con AI"
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    sx={{ mt: 1 }}
+                  />
+                )}
               </Paper>
             )}
             
@@ -325,7 +296,8 @@ function App() {
 
       <Container maxWidth={false} sx={{ flexGrow: 1, p: 2, height: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
         {!selectedFile ? (<Typography sx={{ textAlign: 'center', mt: 4 }}>Seleziona un file dal menu per iniziare.</Typography>) : 
-        slicedData.length === 0 && selectedFile ? (<Typography sx={{ textAlign: 'center', mt: 4 }}>Caricamento dati per {selectedFile}...</Typography>) : 
+        (csvData.length === 0 && !isClassifying) ? (<Typography sx={{ textAlign: 'center', mt: 4 }}>Nessun dato valido trovato in {selectedFile}.</Typography>) : 
+        isClassifying ? (<Typography sx={{ textAlign: 'center', mt: 4 }}>Caricamento dati per {selectedFile}...</Typography>) :
         (
           <Box sx={{ display: 'flex', height: '100%', width: '100%', gap: 2 }}>
             <Box sx={{ width: '45%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -360,23 +332,20 @@ function App() {
           <Typography id="info-modal-title" variant="h5" component="h2" gutterBottom>
             Spiegazione dei Tipi di Dati
           </Typography>
-          
-          {/* --- MODIFICA: Contenuto del modale generato dinamicamente --- */}
           <Box id="info-modal-description" sx={{ mt: 2 }}>
-            {infoContent.map((item, index) => (
+            {infoContent.map((item) => (
               <Fragment key={item.id}>
-                <Typography variant="h6" component="h3" sx={{ fontWeight: 'bold' }}>
-                  {item.title}
-                </Typography>
-                <Typography variant="body1" color="text.secondary">
-                  {item.description}
-                </Typography>
-                {/* Aggiunge il divisore ovunque tranne che dopo l'ultimo elemento */}
-                {index < infoContent.length - 1 && <Divider sx={{ my: 2 }} />}
+                <Paper elevation={item.id === dataTypeId ? 3 : 0} variant={item.id === dataTypeId ? 'elevation' : 'outlined'} sx={{ p: 2, mb: 2, transition: 'all 0.3s', borderColor: item.id === dataTypeId ? 'primary.main' : 'divider' }}>
+                  <Typography variant="h6" component="h3" sx={{ fontWeight: 'bold' }}>
+                    {item.title}
+                  </Typography>
+                  <Typography variant="body1" color="text.secondary">
+                    {item.description}
+                  </Typography>
+                </Paper>
               </Fragment>
             ))}
           </Box>
-
         </Box>
       </Modal>
     </Box>

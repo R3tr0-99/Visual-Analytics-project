@@ -1,7 +1,8 @@
 [
-  "elezioni-eu.csv",
-  "elezioni.csv",
-  "tipo1.csv",
-  "wine.csv",
+  "dati_caso2_vini.csv",
+  "dati_caso3_specifiche_auto.csv",
+  "dati_caso4_voti_universitari.csv",
+  "dati_caso5_elezioni-eu.csv",
+  "dati_caso6_elezioni.csv",
   "LargeTest.csv"
 ]
