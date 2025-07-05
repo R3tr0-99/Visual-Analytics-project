@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, createRef, useRef } from 'react';
 import * as d3 from 'd3';
-import './App.css';
+// L'import di App.css è stato rimosso
 import {
   Typography, Box, ToggleButton, ToggleButtonGroup, Container, Slider, Modal, IconButton, Tooltip,
   Accordion, AccordionSummary, AccordionDetails, Paper, Button, FormGroup, FormControlLabel, Checkbox
@@ -16,51 +16,27 @@ import PieChart from './components/pieChart';
 import InfoIcon from '@mui/icons-material/Info';
 
 
-// --- NUOVA FUNZIONE DI CLASSIFICAZIONE  ---
-
+// --- FUNZIONE DI CLASSIFICAZIONE (invariata) ---
 const classifyCsvData = (data, features) => {
   if (!data?.length || !features?.length) {
     return 'Dati Insufficienti o Non Numerici';
   }
-
-  let allInUnit = true;
-  let allSumsAre1 = true;
   const epsilon = 1e-4;
-
   for (const row of data) {
     let sum = 0;
-
     for (const f of features) {
       const v = row[f];
-
-      if (typeof v !== 'number' || isNaN(v)) {
-        return 'Dati Non Partizionali'; // valore non numerico
+      if (typeof v !== 'number' || isNaN(v) || v < 0 || v > 1) {
+        return 'Dati Non Partizionali';
       }
-
-      if (v < 0 || v > 1) {
-        return 'Dati Non Partizionali'; // valore fuori [0,1]
-      }
-
       sum += v;
     }
-
-    // Se la somma non è circa 1, non è partizionale
     if (Math.abs(sum - 1) > epsilon) {
-      allSumsAre1 = false;
+      return 'Valori in [0,1] ma non partizionali';
     }
   }
-
-  if (allSumsAre1) {
-    return 'Dati Partizionali (valori in [0,1], somma righe ≈ 1)';
-  } else if (allInUnit) {
-    return 'Valori in [0,1] ma non partizionali';
-  } else {
-    return 'Impossibile classificare dai dati';
-  }
+  return 'Dati Partizionali (valori in [0,1], somma righe ≈ 1)';
 };
-
-
-
 
 const modalStyle = {
   position: 'absolute',
@@ -89,7 +65,7 @@ function App() {
   const [numberOfRows, setNumberOfRows] = useState(0);
   const [zoomedChart, setZoomedChart] = useState(null);
   const pieChartRefs = useRef([]);
-  const [isMenuOpen, setIsMenuOpen] = useState(true);
+  const [isMenuOpen, setIsMenuOpen] = useState(true); // Stato per il pannello laterale
   const [dataType, setDataType] = useState(null);
 
   useEffect(() => {
@@ -198,7 +174,8 @@ function App() {
     if (features.length === 0) return null;
     return d3.scaleOrdinal().domain(features).range(d3.schemeTableau10);
   }, [features]);
-
+  
+  // -- DEFINIZIONE DEI COMPONENTI GRAFICO --
   const chartComponents = {
     radviz: <RadvizChart 
               changeType={changeType} 
@@ -211,59 +188,42 @@ function App() {
     radar: <RadarChart data={slicedData} features={visibleFeatures} type={type} />,
     stacked: <StackedBarChart data={slicedData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} onBarClick={handleBarClick} />,
     pie: (
-      <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%', overflowX: 'auto', '&::-webkit-scrollbar': { height: '8px' }, '&::-webkit-scrollbar-thumb': { backgroundColor: '#ccc', borderRadius: '4px' } }}>
+      <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%', overflowX: 'auto', p: 1, gap: 1, '&::-webkit-scrollbar': { height: '8px' }, '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '4px' } }}>
         {slicedData.map((node, index) => (
-          <Box key={node.id} ref={pieChartRefs.current[index]} sx={{ minWidth: '300px', height: '100%', flexShrink: 0 }}>
-            <PieChart title={`Nodo: ${node.name || node.id}`} data={visibleFeatures.map(key => ({ label: key, value: node[key] }))} colorScale={colorScale} />
-          </Box>
+          <Paper key={node.id} ref={pieChartRefs.current[index]} elevation={2} sx={{ minWidth: '280px', height: '100%', flexShrink: 0, overflow: 'hidden' }}>
+            <PieChart title={`${node.name || node.id}`} data={visibleFeatures.map(key => ({ label: key, value: node[key] }))} colorScale={colorScale} />
+          </Paper>
         ))}
       </Box>
     )
   };
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh', width: '100vw' }}>
+    <Box sx={{ display: 'flex', height: '100vh', width: '100vw', bgcolor: 'background.default' }}>
+      {/* PANNELLO LATERALE MIGLIORATO */}
       <Paper elevation={4} sx={{ width: isMenuOpen ? '350px' : '60px', flexShrink: 0, height: '100vh', transition: 'width 0.3s ease', overflow: 'hidden', position: 'relative', borderRadius: 0 }}>
-        <Accordion expanded={isMenuOpen} onChange={() => setIsMenuOpen(!isMenuOpen)} sx={{'::before': { display: 'none' }}}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls="controls-panel-content" id="controls-panel-header" sx={{ height: '60px', "& .MuiAccordionSummary-content": { display: 'flex', alignItems: 'center', gap: 1.5 }}}>
+        <Accordion expanded={isMenuOpen} onChange={() => setIsMenuOpen(!isMenuOpen)} sx={{ '::before': { display: 'none' } }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls="controls-panel-content" id="controls-panel-header" sx={{ height: '60px', "& .MuiAccordionSummary-content": { display: 'flex', alignItems: 'center', gap: 1.5 } }}>
             <SettingsIcon />
             {isMenuOpen && <Typography variant="h6">Impostazioni</Typography>}
           </AccordionSummary>
           
-          <AccordionDetails sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
+          <AccordionDetails sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', height: 'calc(100vh - 60px)', overflowY: 'auto' }}>
             <Box>
-              <Typography variant="subtitle1" gutterBottom sx={{textAlign: 'center', mb: 1}}>Seleziona File CSV</Typography>
-              <ToggleButtonGroup value={selectedFile} exclusive onChange={(e, newValue) => { if (newValue !== null) setSelectedFile(newValue); }} aria-label="file selection" orientation="vertical">
+              <Typography variant="subtitle1" gutterBottom sx={{ textAlign: 'center', mb: 1 }}>Seleziona File CSV</Typography>
+              <ToggleButtonGroup value={selectedFile} exclusive onChange={(e, newValue) => { if (newValue !== null) setSelectedFile(newValue); }} aria-label="file selection" orientation="vertical" fullWidth>
                 {fileList.map((fileName) => (<ToggleButton sx={{ textTransform: 'none' }} key={fileName} value={fileName} aria-label={fileName}>{fileName}</ToggleButton>))}
               </ToggleButtonGroup>
             </Box>
 
             {dataType && (
-              <Box
-                sx={{
-                  width: '90%',
-                  textAlign: 'center',
-                  p: 2,
-                  bgcolor: '#f0f4ff',
-                  border: '1px solid #90caf9',
-                  borderRadius: 2,
-                  boxShadow: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 1,
-                }}
-              >
+              <Paper variant="outlined" sx={{ width: '90%', textAlign: 'center', p: 2, bgcolor: 'action.hover', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <InfoIcon color="info" />
-                  <Typography variant="subtitle1" component="div" fontWeight={600}>
-                    Proprietà Dati Rilevate
-                  </Typography>
+                  <Typography variant="subtitle1" component="div" fontWeight={600}>Proprietà Dati</Typography>
                 </Box>
-                <Typography variant="body2" color="text.secondary">
-                  {dataType}
-                </Typography>
-              </Box>
+                <Typography variant="body2" color="text.secondary">{dataType}</Typography>
+              </Paper>
             )}
             
             {features.length > 0 && (
@@ -283,29 +243,30 @@ function App() {
               <Box sx={{ width: '90%' }}>
                 <Typography id="tuple-slider" gutterBottom>Numero di Righe: {numberOfRows}</Typography>
                 <Slider aria-labelledby="tuple-slider" value={numberOfRows} onChange={(e, newValue) => setNumberOfRows(newValue)} min={1} max={csvData.length} valueLabelDisplay="auto" />
-                <Button variant="outlined" onClick={handleRandomSelection} fullWidth sx={{ mt: 2 }}>Selezione Random</Button>
+                <Button variant="outlined" onClick={handleRandomSelection} fullWidth sx={{ mt: 2 }}>Selezione Casuale</Button>
               </Box>
             )}
           </AccordionDetails>
         </Accordion>
       </Paper>
 
-      <Container maxWidth={false} sx={{ flexGrow: 1, p: 2, height: '100%', boxSizing: 'border-box' }}>
-        {!selectedFile ? (<Typography sx={{textAlign: 'center', mt: 4}}>Seleziona un file dal menu a sinistra per iniziare.</Typography>) : 
-        slicedData.length === 0 && selectedFile ? (<Typography sx={{textAlign: 'center', mt: 4}}>Caricamento dati per {selectedFile}...</Typography>) : 
+      {/* AREA CONTENUTO PRINCIPALE */}
+      <Container maxWidth={false} sx={{ flexGrow: 1, p: 2, height: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
+        {!selectedFile ? (<Typography sx={{ textAlign: 'center', mt: 4 }}>Seleziona un file dal menu per iniziare.</Typography>) : 
+        slicedData.length === 0 && selectedFile ? (<Typography sx={{ textAlign: 'center', mt: 4 }}>Caricamento dati per {selectedFile}...</Typography>) : 
         (
           <Box sx={{ display: 'flex', height: '100%', width: '100%', gap: 2 }}>
             <Box sx={{ width: '45%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('radviz')} sx={{ width: '100%', height: '100%', p: 1, overflow: 'hidden', display:'flex' }}>{chartComponents.radviz}</Paper></Tooltip>
+              <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('radviz')} elevation={2} sx={{ width: '100%', height: '100%', p: 1, overflow: 'hidden', display: 'flex' }}>{chartComponents.radviz}</Paper></Tooltip>
             </Box>
             <Box sx={{ width: '55%', height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Box sx={{ display: 'flex', height: '50%', gap: 2 }}>
-                <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('bar')} sx={{ width: '70%', height: '100%', p: 1, overflow: 'hidden' }}>{chartComponents.bar}</Paper></Tooltip>
-                <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('radar')} sx={{ width: '30%', height: '100%', p: 1, overflow: 'hidden', display: 'flex', alignItems:'center', justifyContent:'center' }}>{chartComponents.radar}</Paper></Tooltip>
+                <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('bar')} elevation={2} sx={{ width: '70%', height: '100%', p: 1, overflow: 'hidden' }}>{chartComponents.bar}</Paper></Tooltip>
+                <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('radar')} elevation={2} sx={{ width: '30%', height: '100%', p: 1, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{chartComponents.radar}</Paper></Tooltip>
               </Box>
               <Box sx={{ display: 'flex', height: '50%', gap: 2 }}>
-                <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('stacked')} sx={{ width: '70%', height: '100%', p: 1, overflow: 'hidden' }}>{chartComponents.stacked}</Paper></Tooltip>
-                <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('pie')} sx={{ width: '30%', height: '100%', p: 1, overflow: 'hidden' }}>{chartComponents.pie}</Paper></Tooltip>
+                <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('stacked')} elevation={2} sx={{ width: '70%', height: '100%', p: 1, overflow: 'hidden' }}>{chartComponents.stacked}</Paper></Tooltip>
+                <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('pie')} elevation={2} sx={{ width: '30%', height: '100%', p: 1, overflow: 'hidden' }}>{chartComponents.pie}</Paper></Tooltip>
               </Box>
             </Box>
           </Box>
@@ -314,7 +275,7 @@ function App() {
       
       <Modal open={zoomedChart !== null} onClose={() => handleZoom(null)} aria-labelledby="zoomed-chart-title">
         <Box sx={modalStyle}>
-          <IconButton aria-label="close" onClick={() => handleZoom(null)} sx={{ position: 'absolute', right: 8, top: 8, color: (theme) => theme.palette.grey[500],}}><CloseIcon /></IconButton>
+          <IconButton aria-label="close" onClick={() => handleZoom(null)} sx={{ position: 'absolute', right: 8, top: 8, zIndex: 1, color: (theme) => theme.palette.grey[500], }}><CloseIcon /></IconButton>
           {zoomedChart && chartComponents[zoomedChart]}
         </Box>
       </Modal>
