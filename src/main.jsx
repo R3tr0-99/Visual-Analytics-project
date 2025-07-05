@@ -7,12 +7,12 @@ import './index.css';
 // --- TEMA AGGIORNATO E COMPLETO ---
 const modernTheme = createTheme({
   shape: {
-    borderRadius: 12, // Bordi più morbidi
+    borderRadius: 15, // Bordi più morbidi
   },
   palette: {
     mode: 'light',
     background: {
-      default: '#f4f6f8', // Grigio neutro e chiaro
+      default: '#F0FFFF', // Grigio neutro e chiaro
       paper: '#ffffff',
     },
     primary: {

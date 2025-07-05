@@ -3,11 +3,11 @@ import * as d3 from 'd3';
 
 import {
   Typography, Box, ToggleButton, ToggleButtonGroup, Container, Slider, Modal, IconButton, Tooltip,
-  Accordion, AccordionSummary, AccordionDetails, Paper, Button, FormGroup, FormControlLabel, Checkbox
+  Paper, Button, FormGroup, FormControlLabel, Checkbox
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SettingsIcon from '@mui/icons-material/Settings';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import RadvizChart from './components/RadvizChart';
 import RadarChart from './components/radarChart';
 import BarChart from './components/barChart';
@@ -142,16 +142,12 @@ function App() {
   }, [slicedData, selectedNodes, features]);
 
   const handleBarClick = useCallback((clickedNodeName) => {
-    // 1. Esegui sempre la selezione del nodo
     handleNodeSelection(clickedNodeName);
 
-    // 2. Se un grafico è ingrandito (in un modale), chiudi il modale
     if (zoomedChart) {
       handleZoom(null);
     }
 
-    // 3. Esegui lo scroll. Usiamo un setTimeout per assicurarci che il DOM si sia
-    //    aggiornato (cioè, il modale si sia chiuso) prima di tentare lo scroll.
     setTimeout(() => {
       const nodeIndex = slicedData.findIndex(node => node.name === clickedNodeName);
       if (nodeIndex !== -1 && pieChartRefs.current[nodeIndex]?.current) {
@@ -159,10 +155,8 @@ function App() {
           behavior: 'smooth', block: 'nearest', inline: 'center'
         });
       }
-    }, 100); // 100ms è un ritardo sicuro per consentire la transizione di chiusura del modale
-
-  }, [slicedData, handleNodeSelection, zoomedChart]); // Aggiungi zoomedChart alle dipendenze
-  // --- FINE MODIFICA ---
+    }, 100); 
+  }, [slicedData, handleNodeSelection, zoomedChart]);
 
   const handleZoom = (chartKey) => setZoomedChart(current => (current === chartKey ? null : chartKey));
   const hoveredNodeChanged = useCallback((node) => setHoveredNode(node), []);
@@ -213,16 +207,50 @@ function App() {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh', width: '100vw', bgcolor: 'background.default' }}>
-      {/* PANNELLO LATERALE MIGLIORATO */}
-      <Paper elevation={4} sx={{ width: isMenuOpen ? '350px' : '60px', flexShrink: 0, height: '100vh', transition: 'width 0.3s ease', overflow: 'hidden', position: 'relative', borderRadius: 0 }}>
-        <Accordion expanded={isMenuOpen} onChange={() => setIsMenuOpen(!isMenuOpen)} sx={{ '::before': { display: 'none' } }}>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />} aria-controls="controls-panel-content" id="controls-panel-header" sx={{ height: '60px', "& .MuiAccordionSummary-content": { display: 'flex', alignItems: 'center', gap: 1.5 } }}>
-            <SettingsIcon />
-            {isMenuOpen && <Typography variant="h6">Impostazioni</Typography>}
-          </AccordionSummary>
-          
-          <AccordionDetails sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', height: 'calc(100vh - 60px)', overflowY: 'auto' }}>
-            <Box>
+      
+      <Paper 
+        elevation={4} 
+        sx={{ 
+          width: isMenuOpen ? '350px' : '60px', 
+          flexShrink: 0, 
+          height: '100vh', 
+          transition: 'width 0.3s ease', 
+          overflowX: 'hidden',
+          overflowY: 'auto',
+          position: 'relative', 
+          // --- MODIFICA: Arrotonda solo gli angoli a destra per un look più pulito ---
+          borderRadius: '0 15px 15px 0',
+          display: 'flex',
+          flexDirection: 'column',
+          boxSizing: 'border-box'
+        }}
+      >
+        {/* Header del Pannello */}
+        <Box 
+          sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            p: '0 8px 0 16px', 
+            height: '60px', 
+            flexShrink: 0,
+          }}
+        >
+          {isMenuOpen && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, overflow: 'hidden', whiteSpace: 'nowrap' }}>
+              <SettingsIcon />
+              <Typography variant="h6">Impostazioni</Typography>
+            </Box>
+          )}
+          <IconButton onClick={() => setIsMenuOpen(!isMenuOpen)} sx={{ ml: isMenuOpen ? 1 : 0 }}>
+            {isMenuOpen ? <ChevronLeftIcon /> : <SettingsIcon />}
+          </IconButton>
+        </Box>
+
+        {/* Contenuto del Pannello (visibile solo se aperto) */}
+        {isMenuOpen && (
+          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', flexGrow: 1 }}>
+            <Box sx={{width: '100%'}}>
               <Typography variant="subtitle1" gutterBottom sx={{ textAlign: 'center', mb: 1 }}>Seleziona File CSV</Typography>
               <ToggleButtonGroup value={selectedFile} exclusive onChange={(e, newValue) => { if (newValue !== null) setSelectedFile(newValue); }} aria-label="file selection" orientation="vertical" fullWidth>
                 {fileList.map((fileName) => (<ToggleButton sx={{ textTransform: 'none' }} key={fileName} value={fileName} aria-label={fileName}>{fileName}</ToggleButton>))}
@@ -259,8 +287,8 @@ function App() {
                 <Button variant="outlined" onClick={handleRandomSelection} fullWidth sx={{ mt: 2 }}>Selezione Casuale</Button>
               </Box>
             )}
-          </AccordionDetails>
-        </Accordion>
+          </Box>
+        )}
       </Paper>
 
       {/* AREA CONTENUTO PRINCIPALE */}
