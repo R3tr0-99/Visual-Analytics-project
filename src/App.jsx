@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, createRef, useRef } from 'react';
 import * as d3 from 'd3';
-// L'import di App.css è stato rimosso
+
 import {
   Typography, Box, ToggleButton, ToggleButtonGroup, Container, Slider, Modal, IconButton, Tooltip,
   Accordion, AccordionSummary, AccordionDetails, Paper, Button, FormGroup, FormControlLabel, Checkbox
@@ -16,7 +16,7 @@ import PieChart from './components/pieChart';
 import InfoIcon from '@mui/icons-material/Info';
 
 
-// --- FUNZIONE DI CLASSIFICAZIONE (invariata) ---
+// --- FUNZIONE DI CLASSIFICAZIONE 
 const classifyCsvData = (data, features) => {
   if (!data?.length || !features?.length) {
     return 'Dati Insufficienti o Non Numerici';
@@ -142,14 +142,27 @@ function App() {
   }, [slicedData, selectedNodes, features]);
 
   const handleBarClick = useCallback((clickedNodeName) => {
-    const nodeIndex = slicedData.findIndex(node => node.name === clickedNodeName);
-    if (nodeIndex !== -1 && pieChartRefs.current[nodeIndex]?.current) {
-      pieChartRefs.current[nodeIndex].current.scrollIntoView({
-        behavior: 'smooth', block: 'nearest', inline: 'center'
-      });
-    }
+    // 1. Esegui sempre la selezione del nodo
     handleNodeSelection(clickedNodeName);
-  }, [slicedData, handleNodeSelection]);
+
+    // 2. Se un grafico è ingrandito (in un modale), chiudi il modale
+    if (zoomedChart) {
+      handleZoom(null);
+    }
+
+    // 3. Esegui lo scroll. Usiamo un setTimeout per assicurarci che il DOM si sia
+    //    aggiornato (cioè, il modale si sia chiuso) prima di tentare lo scroll.
+    setTimeout(() => {
+      const nodeIndex = slicedData.findIndex(node => node.name === clickedNodeName);
+      if (nodeIndex !== -1 && pieChartRefs.current[nodeIndex]?.current) {
+        pieChartRefs.current[nodeIndex].current.scrollIntoView({
+          behavior: 'smooth', block: 'nearest', inline: 'center'
+        });
+      }
+    }, 100); // 100ms è un ritardo sicuro per consentire la transizione di chiusura del modale
+
+  }, [slicedData, handleNodeSelection, zoomedChart]); // Aggiungi zoomedChart alle dipendenze
+  // --- FINE MODIFICA ---
 
   const handleZoom = (chartKey) => setZoomedChart(current => (current === chartKey ? null : chartKey));
   const hoveredNodeChanged = useCallback((node) => setHoveredNode(node), []);
