@@ -1,5 +1,4 @@
 import { Box, Button } from "@mui/material";
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { minEffectivenessErrorHeuristic } from "../utils/arrangement"; 
 
@@ -33,13 +32,13 @@ export default function RadvizChart(props) {
         return () => resizeObserver.disconnect();
     }, []);
 
-   // Pre-processa i dati da visualizzare basandosi sulle features 
+    // Pre-processa i dati da visualizzare basandosi sulle features 
     const radvizData = useMemo(() => {
         if (!props.data || !props.features) return [];
         // Crea un nuovo array di oggetti che contengono solo le features visibili + 'name'/'id'
         return props.data.map(d => {
             const newObj = {
-                name: d.name, // 'name'  per la comunicazione e le etichette
+                name: d.name, // 'name' per la comunicazione e le etichette
                 id: d.id,
             };
             props.features.forEach(feature => {
@@ -48,7 +47,6 @@ export default function RadvizChart(props) {
             return newObj;
         });
     }, [props.data, props.features]);
-
 
     // Effect #2: Disegno e aggiornamento del grafico
     useEffect(() => {
@@ -75,7 +73,7 @@ export default function RadvizChart(props) {
                     
                     selectedNodeElement.current = null;
                     setNodeHovered(null);
-                    props.nodeSelectedChanged(null); //  Notifica all'App la deselezione con null
+                    props.nodeSelectedChanged(null); // Notifica all'App la deselezione con null
                     return;
                 }
                 
@@ -93,12 +91,12 @@ export default function RadvizChart(props) {
                 
                 selectedNodeElement.current = clickedEl;
                 setNodeHovered(data);
-                //  Notifica all'App il NOME del nodo selezionato
+                // Notifica all'App il NOME del nodo selezionato
                 props.nodeSelectedChanged(data.name); 
             });
         }
         
-        //  Passa i dati pre-filtrati e rimuovi la chiamata a .dimensions()
+        // Passa i dati pre-filtrati e rimuovi la chiamata a .dimensions()
         chartRef.current.data(radvizData);
 
         svgRef.current
@@ -124,7 +122,49 @@ export default function RadvizChart(props) {
 
     }, [radvizData, props.features, containerDims, type, props.nodeSelectedChanged]); 
 
-    // Effect #3: Reset quando cambiano i dati
+    // Effect #3: Gestione selezione esterna (da StackedBarChart)
+    useEffect(() => {
+        if (!props.selectedNodeName || !svgRef.current) {
+            // Se non c'è selezione esterna, resetta la selezione locale se necessario
+            if (selectedNodeElement.current) {
+                const prevEl = selectedNodeElement.current;
+                const rPrev = +prevEl.attr('r-prev') || +prevEl.attr('r-default') || 1;
+                prevEl.classed('selected', false).attr('r', rPrev).attr('stroke', 'black').attr('stroke-width', 0.2).attr('r-prev', null);
+                selectedNodeElement.current = null;
+            }
+            return;
+        }
+
+        // Trova il nodo corrispondente al nome selezionato
+        const circles = svgRef.current.selectAll("circle.data_point");
+        let targetElement = null;
+        
+        circles.each(function() {
+            const data = this.__data__;
+            if (data && data.name === props.selectedNodeName) {
+                targetElement = d3.select(this);
+                return;
+            }
+        });
+
+        if (targetElement && targetElement.node() !== (selectedNodeElement.current && selectedNodeElement.current.node())) {
+            // Deseleziona il nodo precedente se esiste
+            if (selectedNodeElement.current) {
+                const prevEl = selectedNodeElement.current;
+                const rPrev = +prevEl.attr('r-prev') || +prevEl.attr('r-default') || 1;
+                prevEl.classed('selected', false).attr('r', rPrev).attr('stroke', 'black').attr('stroke-width', 0.2).attr('r-prev', null);
+            }
+
+            // Seleziona il nuovo nodo
+            const defaultR = +targetElement.attr('r-default') || 1;
+            const currentR = +targetElement.attr('r') || defaultR;
+            targetElement.attr('r-prev', currentR).classed('selected', true).attr('r', defaultR * 2).attr('stroke', 'red').attr('stroke-width', 2).raise();
+            
+            selectedNodeElement.current = targetElement;
+        }
+    }, [props.selectedNodeName]);
+
+    // Effect #4: Reset quando cambiano i dati
     useEffect(() => {
         resetState();
         if(props.data && props.data.length > 0) {
@@ -161,6 +201,7 @@ export default function RadvizChart(props) {
         if (chartRef.current) {
             chartRef.current.setRadiusPoints(1);
         }
+        selectedNodeElement.current = null;
         // Il re-render pilotato dal cambio di props/stato si occuperà di ridisegnare
     }
     

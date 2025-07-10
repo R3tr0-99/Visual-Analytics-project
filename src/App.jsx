@@ -1,4 +1,7 @@
+// src/App.jsx
+
 import { useCallback, useEffect, useMemo, useState, createRef, useRef, Fragment } from 'react';
+import * as d3 from 'd3'; 
 
 // --- Import dei Componenti UI ---
 import {
@@ -21,7 +24,7 @@ import PieChart from './components/pieChart';
 // --- Import dei Servizi e Contenuti Esterni ---
 import infoContent from './data-types-info.json';
 import { loadAndClassifyData } from './services/dataClassifier.js';
-import { runApiTest } from './services/apiTest.jsx'; 
+import { runApiTest } from './services/apiTest.jsx';
 
 // --- Stili per i Modali ---
 const modalStyle = {
@@ -74,32 +77,29 @@ function App() {
   const [isClassifying, setIsClassifying] = useState(false);
   const [classifiedByAI, setClassifiedByAI] = useState(false);
 
-  // useRef per assicurare che il test API venga eseguito una sola volta
   const apiTestRun = useRef(false);
 
-  // --- Hook per il Test dell'API (eseguito solo una volta in sviluppo) ---
   useEffect(() => {
     if (import.meta.env.DEV && !apiTestRun.current) {
       runApiTest();
-      apiTestRun.current = true; // Imposta il flag per prevenire esecuzioni future
+      apiTestRun.current = true;
     }
   }, []);
 
-  // --- Hook per Caricare la Lista dei File disponibili ---
   useEffect(() => {
     fetch('/data/files.json')
       .then((res) => res.json())
       .then((lista) => setFileList(lista))
       .catch((err) => console.error("Errore nel caricamento di files.json:", err));
   }, []);
-  
-  // --- Hook Principale: Carica e Classifica i Dati quando un file viene selezionato ---
+
   useEffect(() => {
     if (!selectedFile) {
       setCsvData([]);
       setFeatures([]);
       setDataTypeId(null);
       setClassifiedByAI(false);
+      setSelectedNodes([]);
       return;
     }
 
@@ -110,7 +110,7 @@ function App() {
 
       try {
         const { parsedData, features, dataTypeId, classifiedByAI } = await loadAndClassifyData(selectedFile);
-        
+
         setCsvData(parsedData);
         setFeatures(features);
         setVisibleFeatures(features);
@@ -132,7 +132,6 @@ function App() {
     processFile();
   }, [selectedFile]);
 
-  // --- Valori Derivati e Memoizzati ---
   const currentDataTypeInfo = useMemo(() => {
     if (!dataTypeId) return null;
     return infoContent.find(item => item.id === dataTypeId);
@@ -147,17 +146,22 @@ function App() {
   useEffect(() => {
     pieChartRefs.current = Array(slicedData.length).fill().map((_, i) => pieChartRefs.current[i] || createRef());
   }, [slicedData.length]);
-  
+
   const colorScale = useMemo(() => {
     if (features.length === 0) return null;
     return d3.scaleOrdinal().domain(features).range(d3.schemeTableau10);
   }, [features]);
 
-  // --- Callback per l'Interattività ---
+  // --- Callback centralizzata per la selezione del nodo ---
   const handleNodeSelection = useCallback((nodeName) => {
-    if (nodeName === null) { setSelectedNodes([]); return; }
+    if (nodeName === null) {
+      setSelectedNodes([]);
+      return;
+    }
+
     const nodeToSelect = slicedData.find(node => node.name === nodeName);
     if (!nodeToSelect) return;
+
     const isAlreadySelected = selectedNodes.some(n => n.id === nodeToSelect.id);
     if (isAlreadySelected) {
       setSelectedNodes([]);
@@ -166,28 +170,6 @@ function App() {
       setSelectedNodes([selectionObject]);
     }
   }, [slicedData, selectedNodes, features]);
-
-  // --- MODIFICA CHIAVE QUI ---
-  const handleBarClick = useCallback((clickedNodeName) => {
-    // 1. Chiudi il pannello laterale se è aperto
-    if (isMenuOpen) {
-      setIsMenuOpen(false);
-    }
-    
-    // 2. Seleziona il nodo (logica esistente)
-    handleNodeSelection(clickedNodeName);
-    
-    // 3. Chiudi il modale se un grafico è ingrandito (logica esistente)
-    if (zoomedChart) { handleZoom(null); }
-    
-    // 4. Esegui lo scroll verso il grafico a torta corrispondente (logica esistente)
-    setTimeout(() => {
-      const nodeIndex = slicedData.findIndex(node => node.name === clickedNodeName);
-      if (nodeIndex !== -1 && pieChartRefs.current[nodeIndex]?.current) {
-        pieChartRefs.current[nodeIndex].current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      }
-    }, 100); // Ritardo per permettere la transizione di chiusura del pannello
-  }, [slicedData, handleNodeSelection, zoomedChart, isMenuOpen]); // Aggiungi isMenuOpen alle dipendenze
 
   const handleZoom = (chartKey) => setZoomedChart(current => (current === chartKey ? null : chartKey));
   const hoveredNodeChanged = useCallback((node) => setHoveredNode(node), []);
@@ -208,12 +190,21 @@ function App() {
     });
   }, []);
 
-  // --- Definizione dei Componenti Grafico da Renderizzare ---
+  const selectedNodeName = selectedNodes.length > 0 ? selectedNodes[0].name : null;
+
   const chartComponents = {
-    radviz: <RadvizChart changeType={changeType} data={slicedData} features={visibleFeatures} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={handleNodeSelection}/>,
+    radviz: <RadvizChart changeType={changeType} data={slicedData} features={visibleFeatures} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={handleNodeSelection} selectedNodeName={selectedNodeName} />,
     bar: <BarChart hoveredNode={hoveredNode} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} features={visibleFeatures} colorScale={colorScale} />,
     radar: <RadarChart data={slicedData} features={visibleFeatures} type={type} />,
-    stacked: <StackedBarChart data={slicedData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} onBarClick={handleBarClick} />,
+    stacked: (
+      <StackedBarChart
+        data={slicedData}
+        features={visibleFeatures}
+        selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null}
+        colorScale={colorScale}
+        onBarClick={handleNodeSelection}
+      />
+    ),
     pie: (
       <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%', overflowX: 'auto', p: 1, gap: 1, '&::-webkit-scrollbar': { height: '8px' }, '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '4px' } }}>
         {slicedData.map((node, index) => (
@@ -225,7 +216,6 @@ function App() {
     )
   };
 
-  // --- JSX per il Rendering ---
   return (
     <Box sx={{ display: 'flex', height: '100vh', width: '100vw', bgcolor: 'background.default' }}>
       <Paper elevation={4} sx={{ width: isMenuOpen ? '350px' : '60px', flexShrink: 0, height: '100vh', transition: 'width 0.3s ease', overflowX: 'hidden', overflowY: 'auto', position: 'relative', borderRadius: '0 15px 15px 0', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
@@ -306,11 +296,11 @@ function App() {
             <Box sx={{ width: '55%', height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Box sx={{ display: 'flex', height: '50%', gap: 2 }}>
                 <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('bar')} elevation={2} sx={{ width: '70%', height: '100%', p: 1, overflow: 'hidden' }}>{chartComponents.bar}</Paper></Tooltip>
-                <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('radar')} elevation={2} sx={{ width: '30%', height: '100%', p: 1, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{chartComponents.radar}</Paper></Tooltip>
+                <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('pie')} elevation={2} sx={{ width: '30%', height: '100%', p: 1, overflow: 'hidden' }}>{chartComponents.pie}</Paper></Tooltip>
               </Box>
               <Box sx={{ display: 'flex', height: '50%', gap: 2 }}>
                 <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('stacked')} elevation={2} sx={{ width: '70%', height: '100%', p: 1, overflow: 'hidden' }}>{chartComponents.stacked}</Paper></Tooltip>
-                <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('pie')} elevation={2} sx={{ width: '30%', height: '100%', p: 1, overflow: 'hidden' }}>{chartComponents.pie}</Paper></Tooltip>
+                <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('radar')} elevation={2} sx={{ width: '30%', height: '100%', p: 1, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{chartComponents.radar}</Paper></Tooltip>
               </Box>
             </Box>
           </Box>

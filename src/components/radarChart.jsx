@@ -92,7 +92,7 @@ export default function RadarChart({ data, features }) {
         .datum(normalizedValues)
         .attr("d", radarLine)
         .style("stroke", nodeColor).style("fill", nodeColor)
-        .style("fill-opacity", 0.15).style("stroke-width", 2);
+        .style("fill-opacity", 0.00).style("stroke-width", 4);
     });
 
   }, [data, features, dimensions, featureMaxDomains]);
