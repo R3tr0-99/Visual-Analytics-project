@@ -215,33 +215,37 @@ function App() {
     radar: <RadarChart data={slicedData} features={visibleFeatures} type={type} />,
     stacked: <StackedBarChart data={slicedData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} onBarClick={handleBarClick} />,
     pie: (
-      <Box sx={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignContent: 'flex-start',
-        height: '100%',
-        width: '100%',
-        overflow: 'auto',
-        p: 1,
-        gap: 1,
-        '&::-webkit-scrollbar': { width: '8px', height: '8px' },
-        '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '4px' }
-      }}>
+      <Box
+        sx={{
+          display: 'grid',
+          height: '100%',
+          width: '100%',
+          p: 1,
+          gap: 1,
+          overflow: 'hidden',
+          boxSizing: 'border-box',
+        }}
+        // Calcolo dinamico delle colonne in base al numero di pie chart
+        style={{
+          gridTemplateColumns: `repeat(${Math.ceil(Math.sqrt(slicedData.length || 1))}, 1fr)`,
+          gridTemplateRows: `repeat(${Math.ceil(slicedData.length / Math.ceil(Math.sqrt(slicedData.length || 1)))}, 1fr)`
+        }}
+      >
         {slicedData.map((node, index) => (
           <Paper
             key={node.id}
             ref={pieChartRefs.current[index]}
             elevation={2}
             sx={{
-              minWidth: '220px',
-              maxWidth: '260px',
-              minHeight: '220px',
-              maxHeight: '260px',
-              flex: '1 1 220px',
+              width: '100%',
+              height: '100%',
               overflow: 'hidden',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              minWidth: 0,
+              minHeight: 0,
+              boxSizing: 'border-box',
             }}
           >
             <PieChart title={`${node.name || node.id}`} data={visibleFeatures.map(key => ({ label: key, value: node[key] }))} colorScale={colorScale} />
