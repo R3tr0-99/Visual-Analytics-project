@@ -22,7 +22,7 @@ export default function BarChart(props) {
       setNodeToDisplay(null);
     }
   }, [props.selectedNode, props.hoveredNode]);
-
+  console.log(props.selectedNode);
   const [lastLabels, setLastLabels] = useState([]);
   
   useEffect(() => {

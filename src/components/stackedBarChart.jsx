@@ -1,5 +1,3 @@
-// src/components/stackedBarChart.jsx
-
 import React, { useRef, useEffect } from "react";
 import * as d3 from "d3";
 
@@ -34,30 +32,20 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
 
     const stackGen = d3.stack().keys(keys);
     const series = stackGen(normalizedData);
-
+    
     const x = d3.scaleBand().domain(data.map(d => d.name)).range([0, width]).padding(0.1);
     const y = d3.scaleLinear().domain([0, 1]).range([height, 0]);
     const color = colorScale || d3.scaleOrdinal().domain(keys).range(d3.schemeTableau10);
-
-    const barGroups = g.append("g")
-      .selectAll("g")
-      .data(series)
-      .join("g")
+    
+    const barGroups = g.append("g").selectAll("g").data(series).join("g")
         .attr("fill", d => color(d.key))
-      .selectAll("rect")
-      .data(d => d)
-      .join("rect")
+      .selectAll("rect").data(d => d).join("rect")
         .attr("x", d => x(d.data.name)) 
         .attr("y", d => y(d[1]))
         .attr("height", d => y(d[0]) - y(d[1]))
-        .attr("width", x.bandwidth())
-        .style("transition", "opacity 0.3s ease, stroke 0.3s ease");
+        .attr("width", x.bandwidth());
 
-    // Area di click trasparente
-    g.append("g")
-      .selectAll("rect.click-target")
-      .data(normalizedData)
-      .join("rect")
+    g.append("g").selectAll("g").data(normalizedData).join("rect")
         .attr("class", "click-target")
         .attr("x", d => x(d.name))
         .attr("y", 0)
@@ -66,56 +54,31 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
         .style("fill", "transparent")
         .style("cursor", "pointer")
         .on("click", (event, d) => {
-          if (onBarClick) {
-            const currentSelectedName = selectedNode ? selectedNode.name : null;
-            const newSelection = currentSelectedName === d.name ? null : d.name;
-            onBarClick(newSelection);
-          }
+          if (onBarClick) onBarClick(d.name);
         });
 
-    const selectedName = selectedNode ? selectedNode.name : null;
-    barGroups
-      .style("opacity", d => !selectedName || d.data.name === selectedName ? 1 : 0.3)
-      .style("stroke", d => d.data.name === selectedName ? "black" : "none")
-      .style("stroke-width", d => d.data.name === selectedName ? 2 : 0);
-
-    g.append("g")
-      .attr("transform", `translate(0,${height})`)
-      .call(d3.axisBottom(x))
-      .selectAll("text")
-        .attr("transform", "rotate(-45)")
-        .style("text-anchor", "end");
-
-    g.append("g")
-      .call(d3.axisLeft(y).ticks(5).tickFormat(d3.format(".0%")));
-
-    const legendGroup = svg.append("g")
-      .attr("font-family", "sans-serif")
-      .attr("font-size", 10)
-      .attr("text-anchor", "start")
-      .attr("transform", `translate(${margin.left}, 10)`);
-
+    if (selectedNode) {
+      const selectedName = selectedNode.attributes?.name || selectedNode.name;
+      if (selectedName) {
+        barGroups
+          .style("opacity", d => d.data.name === selectedName ? 1 : 0.3)
+          .style("stroke", d => d.data.name === selectedName ? "black" : "none")
+          .style("stroke-width", d => d.data.name === selectedName ? 2 : 0);
+      }
+    }
+    
+    g.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x)).selectAll("text").attr("transform", "rotate(-45)").style("text-anchor", "end");
+    g.append("g").call(d3.axisLeft(y).ticks(5).tickFormat(d3.format(".0%")));
+    
+    const legendGroup = svg.append("g").attr("font-family", "sans-serif").attr("font-size", 10).attr("text-anchor", "start").attr("transform", `translate(${margin.left}, 10)`);
     const legendItems = legendGroup.selectAll("g").data(keys).join("g");
     legendItems.append("rect").attr("width", 19).attr("height", 19).attr("fill", color);
     legendItems.append("text").attr("x", 24).attr("y", 9.5).attr("dy", "0.32em").text(d => d);
-
     let totalLegendWidth = 0; const legendPadding = 15;
-    legendItems.each(function() {
-      const itemWidth = this.getBBox().width;
-      d3.select(this).attr("transform", `translate(${totalLegendWidth}, 0)`);
-      totalLegendWidth += itemWidth + legendPadding;
-    });
+    legendItems.each(function() { const itemWidth = this.getBBox().width; d3.select(this).attr("transform", `translate(${totalLegendWidth}, 0)`); totalLegendWidth += itemWidth + legendPadding; });
+    totalLegendWidth -= legendPadding;
+    if (totalLegendWidth > width) { const scaleFactor = width / totalLegendWidth; legendGroup.attr("font-size", 10 * scaleFactor); let newCurrentX = 0; legendItems.each(function() { const itemWidth = this.getBBox().width; d3.select(this).attr("transform", `translate(${newCurrentX}, 0)`); newCurrentX += itemWidth + legendPadding; }); }
 
-    if (totalLegendWidth > width) {
-      const scaleFactor = width / totalLegendWidth;
-      legendGroup.attr("font-size", 10 * scaleFactor);
-      let newCurrentX = 0;
-      legendItems.each(function() {
-        const itemWidth = this.getBBox().width;
-        d3.select(this).attr("transform", `translate(${newCurrentX}, 0)`);
-        newCurrentX += itemWidth + legendPadding;
-      });
-    }
   }, [data, features, selectedNode, colorScale, margin, onBarClick]);
 
   return (
