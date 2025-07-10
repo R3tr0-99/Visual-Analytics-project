@@ -1,4 +1,5 @@
 // https://github.com/aware-diag-sapienza/d3-radviz v0.0.2 Copyright 2021 A.WA.RE Research Group (http://aware.diag.uniroma1.it/)
+// --- MODIFIED TO REMOVE DEPENDENCY ON A GLOBAL 'system' OBJECT ---
 (function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('d3-selection'), require('d3-transition'), require('d3-array'), require('d3-scale'), require('d3-scale-chromatic'), require('d3-drag'), require('d3-shape')) :
     typeof define === 'function' && define.amd ? define(['exports', 'd3-selection', 'd3-transition', 'd3-array', 'd3-scale', 'd3-scale-chromatic', 'd3-drag', 'd3-shape'], factory) :
@@ -8,7 +9,6 @@
 
   const getDimensionValues = (dimension, entries) => {
     const values = entries.map(e => +e[dimension]);
-    //system.settings.setB
     return {
       numeric: !values.some(isNaN),
       values: !values.some(isNaN) ? values : entries.map(e => e[dimension])
@@ -16,34 +16,27 @@
   };
 
 
-  //Qui aggiorniamo i min e max con i nuovi, modificabili nel menu
+  // --- FIX START ---
+  // Qui aggiorniamo i min e max con i nuovi, modificabili nel menu
   const minMaxNormalization = (attr, values) => {
-    let min, max
-    if (system.settings.usingCustomMinMax) {
-      min = system.settings.attributesIntervals[attr].min
-      max = system.settings.attributesIntervals[attr].max
-
-    }
-    else {
-      min = Math.min(...values);
-      max = Math.max(...values);
-      system.settings.setBaseAttributesIntervals(attr, min, max)
-    }
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    
     let checkDivision = function (v, mi, ma) {
-      if ((v - mi) == 0 || (ma - mi) == 0) return 0;
-      else {
-        //let minmaxNorm=
-        return (v - mi) / (ma - mi);
-      }
+      if ((ma - mi) === 0) return 0; // Prevent division by zero if all values are the same
+      return (v - mi) / (ma - mi);
     };
     return values.map(v => checkDivision(v, min, max));
   };
+  // --- FIX END ---
+
   const sum_one_normalization = (values) => {
-    //return values
     let vSum = 0
     Object.keys(values).forEach(k => {
       vSum += values[k]
     })
+    // Prevent division by zero if sum is 0
+    if (vSum === 0) return values;
     Object.keys(values).forEach(k => {
       values[k] = values[k] / vSum
     })
@@ -146,7 +139,21 @@
         entry.dimensions[d.id] = sum_one_entry[d.id];
         //entry.dimensions[d.id] = d.values[i];
       }
-      for (const a of data.attributes) entry.attributes[a.id] = a.values[i];
+
+      // --- FIX: Populate name and other attributes correctly ---
+      for (const a of data.attributes) {
+        entry.attributes[a.id] = a.values[i];
+        // If 'name' is an attribute, add it to the top level for easy access
+        if (a.id === 'name') {
+            entry.name = a.values[i];
+        }
+      }
+      // If name wasn't in attributes, try to get it from original object
+      if (!entry.name && dataset[i].name) {
+          entry.name = dataset[i].name;
+      }
+
+
       for (const o of data.original) entry.original[o.id] = o.values[i];
       entry.vector = normalizeVector(Object.values(entry.dimensions));
 
@@ -389,9 +396,9 @@
             })
             .attr('cx', function (d) { return scale_x2(d.x2) })
             .attr('cy', function (d) { return scale_x1(d.x1) })
-            .on('contextmenu', function (d) {
+            .on('contextmenu', function (event, d) {
               if (right_click) {
-                d3Selection.event.preventDefault();
+                event.preventDefault();
                 d3Selection.select('#points-g-' + index_radviz).selectAll('circle.data_point-' + index_radviz).style('stroke-width', 0.2);
                 d3Selection.select(this).style('stroke-width', 0.5);
                 data.angles = assignAnglestoDimensions(calculateSinglePointHeuristic(d), data);
@@ -403,7 +410,7 @@
                 if (function_context_menu != null) { function_context_menu(data.angles); }
               }
             })
-            .on('click', function (d) {
+            .on('click', function (event, d) {
               if (function_click != null) {
                 d.selected = !d.selected
                 d3Selection.select(this).style("stroke-width", (d) => {
@@ -413,14 +420,14 @@
                     return 0.2;
                   }
                 })
-                function_click(data.angles, d, d3Selection.select(this));
+                function_click(data.angles, event, d);
 
               }
             })
-            .on('mouseover', function (d) {
+            .on('mouseover', function (event, d) {
               if (function_mouse_over != null) { function_mouse_over(data.angles, d); }
             })
-            .on('mouseout', function (d) {
+            .on('mouseout', function (event, d) {
               if (function_mouse_out != null) { function_mouse_out(d); }
             }),
           update => update
@@ -549,12 +556,12 @@
       d3Selection.select(this).raise().classed('active', true);
     };
     //
-    const dragged = function (d) {
-      d3Selection.select(this).attr('cx', d.x = d3Selection.event.x).attr('cy', d.y = d3Selection.event.y);
+    const dragged = function (d, i) { // D3 v6 event is first argument
+      d3Selection.select(this).attr('cx', d.x = i.x).attr('cy', d.y = i.y);
       d.drag = true;
     };
     //
-    const dragended = function (d) {
+    const dragended = function (event, d) {
       if (d.drag == true) {
         d3Selection.select(this).classed('active', false);
         d.drag = false;
