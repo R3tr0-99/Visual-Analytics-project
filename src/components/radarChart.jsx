@@ -18,7 +18,7 @@ export default function RadarChart({ data, features }) {
     return () => resizeObserver.disconnect();
   }, []);
 
-  // --- MODIFICA CHIAVE 1: Calcola il valore massimo per ogni feature ---
+   // Calcola il valore massimo per ogni feature ---
   // Questo serve per normalizzare i dati in modo che ogni asse sia proporzionato.
   const featureMaxDomains = useMemo(() => {
     if (!data || data.length === 0 || !features || features.length === 0) return {};
@@ -74,7 +74,7 @@ export default function RadarChart({ data, features }) {
       .attr("y", (_, i) => rScale(maxValue * 1.2) * Math.sin(angleSlice * i - Math.PI / 2))
       .text(d => d);
     
-    // --- MODIFICA CHIAVE 2: Normalizzazione e disegno ---
+    
     const radarLine = d3.lineRadial()
       .radius(d => rScale(d.value))
       .angle((_, i) => i * angleSlice)
