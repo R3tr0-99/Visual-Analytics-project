@@ -215,9 +215,35 @@ function App() {
     radar: <RadarChart data={slicedData} features={visibleFeatures} type={type} />,
     stacked: <StackedBarChart data={slicedData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} onBarClick={handleBarClick} />,
     pie: (
-      <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', width: '100%', overflowX: 'auto', p: 1, gap: 1, '&::-webkit-scrollbar': { height: '8px' }, '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '4px' } }}>
+      <Box sx={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignContent: 'flex-start',
+        height: '100%',
+        width: '100%',
+        overflow: 'auto',
+        p: 1,
+        gap: 1,
+        '&::-webkit-scrollbar': { width: '8px', height: '8px' },
+        '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: '4px' }
+      }}>
         {slicedData.map((node, index) => (
-          <Paper key={node.id} ref={pieChartRefs.current[index]} elevation={2} sx={{ minWidth: '280px', height: '100%', flexShrink: 0, overflow: 'hidden' }}>
+          <Paper
+            key={node.id}
+            ref={pieChartRefs.current[index]}
+            elevation={2}
+            sx={{
+              minWidth: '220px',
+              maxWidth: '260px',
+              minHeight: '220px',
+              maxHeight: '260px',
+              flex: '1 1 220px',
+              overflow: 'hidden',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
             <PieChart title={`${node.name || node.id}`} data={visibleFeatures.map(key => ({ label: key, value: node[key] }))} colorScale={colorScale} />
           </Paper>
         ))}
