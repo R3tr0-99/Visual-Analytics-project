@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from "react";
 import * as d3 from "d3";
 
-export default function StackedBarChart({ data, features, colorScale, margin = { top: 40, right: 30, bottom: 50, left: 50 }, selectedNode, onBarClick }) {
+export default function StackedBarChart({ data, features, colorScale, margin = { top: 40, right: 30, bottom: 50, left: 50 }, selectedNode, hoveredNode, onBarClick }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
 
@@ -37,6 +37,8 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
     const y = d3.scaleLinear().domain([0, 1]).range([height, 0]);
     const color = colorScale || d3.scaleOrdinal().domain(keys).range(d3.schemeTableau10);
     
+    // NOTA: Qui raggruppiamo tutti i rettangoli sotto un'unica selezione "barGroups"
+    // per applicare gli stili più facilmente.
     const barGroups = g.append("g").selectAll("g").data(series).join("g")
         .attr("fill", d => color(d.key))
       .selectAll("rect").data(d => d).join("rect")
@@ -57,14 +59,41 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
           if (onBarClick) onBarClick(d.name);
         });
 
-    if (selectedNode) {
-      const selectedName = selectedNode.attributes?.name || selectedNode.name;
-      if (selectedName) {
-        barGroups
-          .style("opacity", d => d.data.name === selectedName ? 1 : 0.3)
-          .style("stroke", d => d.data.name === selectedName ? "black" : "none")
-          .style("stroke-width", d => d.data.name === selectedName ? 2 : 0);
-      }
+    // --- NUOVA LOGICA DI EVIDENZIAZIONE ---
+
+    // 1. Estrai il nome della barra selezionata (dal click) e di quella sotto il mouse (dall'hover)
+    const selectedBarName = selectedNode?.attributes?.name || selectedNode?.name;
+    const hoveredBarName = hoveredNode?.attributes?.name || hoveredNode?.name;
+
+    // 2. Applica gli stili in base a selezione e hover
+    if (selectedBarName || hoveredBarName) {
+      barGroups
+        .style("opacity", d => {
+          const isSelected = d.data.name === selectedBarName;
+          const isHovered = d.data.name === hoveredBarName;
+          // La barra è completamente visibile se è selezionata O se è sotto il mouse
+          return (isSelected || isHovered) ? 1 : 0.3;
+        })
+        .style("stroke", d => {
+          const isSelected = d.data.name === selectedBarName;
+          const isHovered = d.data.name === hoveredBarName;
+          // Il bordo nero (selezione) ha la priorità sul bordo grigio (hover)
+          if (isSelected) return "black";
+          if (isHovered) return "dimgray"; // Stile per l'hover, puoi cambiarlo
+          return "none";
+        })
+        .style("stroke-width", d => {
+          const isSelected = d.data.name === selectedBarName;
+          const isHovered = d.data.name === hoveredBarName;
+          // Applica un bordo se la barra è selezionata o hoverata
+          return (isSelected || isHovered) ? 2 : 0;
+        });
+    } else {
+      // Se non c'è né selezione né hover, resetta tutti gli stili
+      barGroups
+        .style("opacity", 1)
+        .style("stroke", "none")
+        .style("stroke-width", 0);
     }
     
     g.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x)).selectAll("text").attr("transform", "rotate(-45)").style("text-anchor", "end");
@@ -79,7 +108,7 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
     totalLegendWidth -= legendPadding;
     if (totalLegendWidth > width) { const scaleFactor = width / totalLegendWidth; legendGroup.attr("font-size", 10 * scaleFactor); let newCurrentX = 0; legendItems.each(function() { const itemWidth = this.getBBox().width; d3.select(this).attr("transform", `translate(${newCurrentX}, 0)`); newCurrentX += itemWidth + legendPadding; }); }
 
-  }, [data, features, selectedNode, colorScale, margin, onBarClick]);
+  }, [data, features, selectedNode, hoveredNode, colorScale, margin, onBarClick]);
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>

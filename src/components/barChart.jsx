@@ -10,7 +10,7 @@ export default function BarChart(props) {
 
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [nodeToDisplay, setNodeToDisplay] = useState(null);
-
+  
   useEffect(() => {
     if (props.selectedNode) {
       setNodeToDisplay(props.selectedNode);
@@ -22,9 +22,9 @@ export default function BarChart(props) {
       setNodeToDisplay(null);
     }
   }, [props.selectedNode, props.hoveredNode]);
-  console.log(props.selectedNode);
-  const [lastLabels, setLastLabels] = useState([]);
   
+  const [lastLabels, setLastLabels] = useState([]);
+  console.log(props);
   useEffect(() => {
     if (Array.isArray(props.features)) {
       setLastLabels(props.features);

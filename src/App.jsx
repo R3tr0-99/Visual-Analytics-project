@@ -213,7 +213,7 @@ function App() {
     radviz: <RadvizChart changeType={changeType} data={slicedData} features={visibleFeatures} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={handleNodeSelection}/>,
     bar: <BarChart hoveredNode={hoveredNode} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} features={visibleFeatures} colorScale={colorScale} />,
     radar: <RadarChart data={slicedData} features={visibleFeatures} type={type} />,
-    stacked: <StackedBarChart data={slicedData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} onBarClick={handleBarClick} />,
+    stacked: <StackedBarChart data={slicedData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} hoveredNode={hoveredNode} onBarClick={handleBarClick} />,
     pie: (
       <Box
         sx={{
