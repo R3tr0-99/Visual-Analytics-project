@@ -1,113 +1,76 @@
-# React + Vite
+# RadViz Data-Type Visualizer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Questo progetto è un'applicazione web interattiva, costruita con **React, Vite e D3.js**, che serve come dimostrazione pratica dei concetti presentati nel paper di ricerca **"To RadViz or not to RadViz"** (Ficorella et al., EuroVis 2023).
 
-Currently, two official plugins are available:
+L'obiettivo è visualizzare come la tecnica di visualizzazione RadViz si comporta con differenti tipologie di dati, evidenziandone i punti di forza e le criticità a seconda della natura dei domini degli attributi.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Il Concetto Chiave: RadViz e la Tipologia dei Dati
 
-## Expanding the ESLint configuration
+RadViz è una potente tecnica per visualizzare dati multidimensionali in uno scatterplot 2D. Tuttavia, la sua efficacia non è assoluta, ma dipende strettamente dalla natura dei dati. Come analizzato nella **Sezione 4.3 del paper**, la normalizzazione e la semantica dei domini degli attributi giocano un ruolo cruciale.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Questa applicazione permette di caricare diversi dataset, ognuno rappresentante una delle sei categorie di dati identificate nel paper, per osservare direttamente come l'interpretabilità del grafico cambi radicalmente.
 
+## Funzionalità Principali
 
-# File: 1_unconstrained_data.csv
-#####################################################################################################
-# TIPO DI DATO: 1. Unconstrained Data (Dati non vincolati)
-#
-# Cos'è: È il caso più generale e problematico. Gli attributi del dataset non sono correlati
-# tra loro (semanticamente diversi) e ognuno ha un suo Dominio Attivo completamente diverso.
-#
-# Esempio: Un catalogo di prodotti elettronici con attributi come prezzo, peso e valutazione.
-#
-# Problema: La normalizzazione min-max è estremamente fuorviante. Un valore normalizzato
-# di 0.5 per il prezzo corrisponde a un valore originale molto diverso da un valore normalizzato
-# di 0.5 per il peso. Confrontare la "dominanza" di questi attributi nel grafico RadViz è
-# privo di senso. Inoltre, l'analisi è instabile: aggiungere un nuovo prodotto può cambiare
-# i valori minimi/massimi e quindi la posizione di tutti i punti nel grafico.
-#
-# Conclusione degli autori: RadViz NON è adatto per questo tipo di dati.
+*   **Visualizzazioni Multiple Sincronizzate**: Interagisci con RadViz, Stacked Bar Chart, Pie Chart, Bar Chart e Radar Chart. La selezione di un nodo si riflette su tutti i grafici.
+*   **Caricamento di Dati Esemplificativi**: Seleziona dal menu uno dei sei tipi di dataset per testare diversi scenari.
+*   **Classificazione Automatica dei Dati**: L'applicazione analizza il file CSV caricato e ne identifica la tipologia secondo le categorie del paper, mostrando il risultato nella scheda "Proprietà Dati".
+*   **Controllo Interattivo**:
+    *   Filtra il numero di righe da visualizzare.
+    *   Seleziona/deseleziona le dimensioni (attributi) da includere nell'analisi.
+    *   Ingrandisci ogni grafico per un'analisi più dettagliata.
+*   **Animazione dell'Euristica**: All'avvio, il grafico RadViz utilizza l'euristica EEMH (Effectiveness Error Heuristic) per trovare una disposizione ottimale degli assi, come suggerito nel paper per mitigare i problemi di posizionamento.
 
+## Classificazione dei Dati in Pratica (Sezione 4.3 del Paper)
 
-# File: 2_unconstrained_positive_data.csv
-#####################################################################################################
-# TIPO DI DATO: 2. Unconstrained Positive Data (Dati non vincolati e positivi)
-#
-# Cos'è: Un sotto-caso del precedente. I domini sono ancora diversi e non correlati, ma è
-# garantito che tutti i valori siano positivi.
-#
-# Esempio: Risultati di analisi di laboratorio (temperatura, pressione, salinità).
-#
-# Problema: Nonostante i valori siano tutti positivi, i problemi di comparabilità e stabilità
-# della normalizzazione rimangono identici al caso "Unconstrained". I confronti tra attributi
-# sono ancora privi di significato pratico.
-#
-# Conclusione degli autori: Anche in questo caso, RadViz NON è uno strumento consigliato.
-# File: 3_fixed_domains_data.csv
-#####################################################################################################
-# TIPO DI DATO: 3. Data with Fixed Active Domains (Dati con Domini Attivi Fissati)
-#
-# Cos'è: Si decide di "fissare" i domini di normalizzazione a valori predefiniti e standard
-# (es. i Domini Reali), che non cambiano anche se il dataset viene aggiornato. Tuttavia, i
-# domini fissati possono essere diversi tra loro.
-#
-# Esempio: Punteggi di candidati (GPA su scala 0-4, SAT su scala 400-1600).
-#
-# Vantaggio: Il grafico diventa stabile. Aggiungere nuovi dati non cambia la posizione dei
-# punti esistenti.
-#
-# Problema Residuo: Se gli attributi hanno domini fissati ma DIVERSI, il problema della
-# comparabilità rimane. La normalizzazione agisce ancora in modo diverso su ogni attributo.
-#
-# Conclusione: L'utilità di RadViz è limitata, ma almeno l'analisi è stabile nel tempo.
+L'applicazione dimostra le seguenti 6 categorie di dati. Puoi caricarle dal menu laterale per vedere i risultati.
 
+### 1. Dati non Vincolati (Unconstrained Data)
+*   **Descrizione**: Il caso più generale e problematico. Gli attributi sono semanticamente diversi e hanno domini di valori molto differenti (es. prezzo, peso, valutazione).
+*   **File di Esempio**: Non implementato.
+*   **Conclusione del Paper**: **RadViz NON è adatto**. I confronti tra le "dominanze" degli attributi sono privi di senso e l'analisi è instabile.
 
-# File: 4_fixed_common_domains_data.csv
-#####################################################################################################
-# TIPO DI DATO: 4. Data with Fixed and Common Active Domains (Dati con Domini Fissati e Comuni)
-#
-# Cos'è: Questo è un caso molto più favorevole. Tutti gli attributi sono semanticamente
-# simili e condividono lo STESSO IDENTICO Dominio Attivo fissato [Min, Max].
-#
-# Esempio: I voti che uno studente ha preso in diversi esami (es. Matematica, Fisica),
-# tutti valutati nella stessa scala [18, 30].
-#
-# Vantaggio Enorme: Poiché il divisore (Max - Min) è lo stesso per tutti gli attributi, la
-# normalizzazione preserva l'ordine dei valori originali. Se nel grafico un punto è più
-# vicino a "Esame A" che a "Esame B", possiamo concludere che il voto originale di A è
-# maggiore di quello di B (p'i > p'j ==> pi > pj).
-#
-# Conclusione: RadViz è UTILE per questo tipo di dati per fare confronti RELATIVI affidabili.
+### 2. Dati non Vincolati e Positivi (Unconstrained Positive Data)
+*   **Descrizione**: Sotto-caso del precedente in cui tutti i valori sono positivi, ma i domini rimangono non correlati.
+*   **File di Esempio**: `2_unconstrained_positive_data.csv`
+*   **Conclusione del Paper**: **RadViz NON è consigliato**. I problemi di comparabilità e stabilità rimangono.
 
-# File: 5_domain_is_0_1_data.csv
-#####################################################################################################
-# TIPO DI DATO: 5. Data with all Active Domains fixed to [0,1]
-#
-# Cos'è: I dati sono già naturalmente espressi in un intervallo da 0 a 1 (es. percentuali,
-# tassi di successo, probabilità, punteggi già normalizzati).
-#
-# Esempio: Risultati di trial clinici, dove ogni valore è un tasso o una probabilità.
-#
-# Vantaggio: Non serve alcuna normalizzazione (o la normalizzazione è p'i = pi). Il valore
-# nel grafico corrisponde al valore originale, eliminando ogni distorsione. L'analisi è
-# diretta e affidabile.
-#
-# Conclusione: RadViz è un OTTIMO strumento per questa categoria di dati.
+### 3. Dati con Domini Fissati (Data with Fixed Active Domains)
+*   **Descrizione**: I domini di normalizzazione sono fissati a valori predefiniti (es. GPA 0-4, SAT 400-1600), rendendo il grafico stabile all'aggiunta di nuovi dati.
+*   **File di Esempio**: `3_fixed_domains_data.csv`
+*   **Conclusione del Paper**: **Utilità Limitata**. Il grafico è stabile, ma se i domini sono diversi, la comparabilità tra attributi è ancora problematica.
 
-# File: 6_partitions_data.csv
-#####################################################################################################
-# TIPO DI DATO: 6. Data that represent Partitions (Dati che rappresentano Partizioni)
-#
-# Cos'è: È un caso speciale e ideale. I valori di ogni riga non solo sono tra 0 e 1, ma la
-# loro somma è uguale a 1 (o 100%).
-#
-# Esempio: Le quote di mercato di diverse aziende in varie città. Per ogni città (riga),
-# la somma delle quote di mercato (colonne) è 100%.
-#
-# Vantaggio: Questo è il CASO D'USO PERFETTO per RadViz. La metafora delle "forze delle
-# molle" usata per spiegare RadViz si sposa perfettamente con questo tipo di dati. Non
-# solo non c'è distorsione, ma diventa possibile stimare direttamente i valori dal grafico
-# e usare tecniche avanzate (come le "boundary lines") per analisi quantitative.
-#
-# Conclusione: RadViz è lo strumento IDEALE per analizzare partizioni.
+### 4. Dati con Domini Fissati e Comuni (Data with Fixed and Common Active Domains)
+*   **Descrizione**: Il caso favorevole. Tutti gli attributi sono semanticamente simili e condividono lo **stesso identico dominio** (es. voti di esami tutti su scala 18-30).
+*   **File di Esempio**: `4_fixed_common_domains_data.csv`
+*   **Conclusione del Paper**: **RadViz è UTILE**. La normalizzazione preserva l'ordine dei valori originali, permettendo confronti relativi affidabili.
+
+### 5. Dati con Dominio [0, 1] (Data with all Active Domains fixed to [0,1])
+*   **Descrizione**: I dati sono già naturalmente espressi come percentuali o probabilità (0-1).
+*   **File di Esempio**: `5_domain_is_0_1_data.csv`
+*   **Conclusione del Paper**: **RadViz è un OTTIMO strumento**. Non è necessaria alcuna normalizzazione distorsiva, e l'analisi è diretta.
+
+### 6. Dati come Partizioni (Data that represent Partitions)
+*   **Descrizione**: Il caso d'uso ideale. I valori di ogni riga non solo sono tra 0 e 1, ma la loro somma è 1 (100%).
+*   **File di Esempio**: `6_partitions_data.csv`
+*   **Conclusione del Paper**: **RadViz è lo STRUMENTO IDEALE**. La metafora delle "forze delle molle" si applica perfettamente, permettendo analisi quantitative accurate.
+
+## Struttura del Progetto
+
+```text
+/
+├── public/
+│   └── data/                 # Contiene i file .csv e files.json
+├── src/
+│   ├── components/           # Componenti React per ogni grafico (Radviz, BarChart, etc.)
+│   ├── services/             # Logica per il caricamento e la classificazione dei dati
+│   ├── App.jsx               # Componente principale dell'applicazione
+│   └── main.jsx              # Punto di ingresso di React
+└── README.md
+```
+
+## Crediti e Riferimenti
+
+Questo lavoro è un'implementazione e una dimostrazione pratica dei concetti presentati nel seguente paper di ricerca, a cui si deve il fondamento teorico del progetto:
+
+> M. Ficorella, S. Lenti, and G. Santucci, **"To RadViz or not to RadViz"**, in *Eurographics Conference on Visualization (EuroVis) 2023*, D. Archambault, R. Bujack, and T. Schreck (Guest Editors), vol. 42, no. 3, 2023.
