@@ -1,3 +1,5 @@
+
+/*
 // src/services/apiTest.js
 
 /**
@@ -43,3 +45,4 @@ export const runApiTest = async () => {
     console.log("--- Fine Test API Google Gemini ---");
   }
 };
+

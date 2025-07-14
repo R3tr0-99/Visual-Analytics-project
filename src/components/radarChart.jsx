@@ -1,6 +1,19 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as d3 from 'd3';
-import { Box, Typography } from "@mui/material";
+import { Box, Typography, Paper } from "@mui/material";
+
+const tooltipStyle = {
+  position: 'absolute',
+  textAlign: 'center',
+  padding: '6px',
+  fontSize: '12px',
+  background: 'rgba(0, 0, 0, 0.7)',
+  color: 'white',
+  borderRadius: '4px',
+  pointerEvents: 'none',
+  opacity: 0,
+  transition: 'opacity 0.2s',
+};
 
 export default function RadarChart({ data, features }) {
   const containerRef = useRef(null);
@@ -18,17 +31,7 @@ export default function RadarChart({ data, features }) {
     return () => resizeObserver.disconnect();
   }, []);
 
-   // Calcola il valore massimo per ogni feature ---
-  // Questo serve per normalizzare i dati in modo che ogni asse sia proporzionato.
-  const featureMaxDomains = useMemo(() => {
-    if (!data || data.length === 0 || !features || features.length === 0) return {};
-    const maxDomains = {};
-    features.forEach(feature => {
-      const maxVal = d3.max(data, d => d[feature] || 0);
-      maxDomains[feature] = Math.max(0.001, maxVal); // Evita divisione per zero
-    });
-    return maxDomains;
-  }, [data, features]);
+  
 
   useEffect(() => {
     const { width, height } = dimensions;
@@ -38,71 +41,160 @@ export default function RadarChart({ data, features }) {
     }
 
     const size = Math.min(width, height);
-    const margin = 40;
+    const margin = 50;
     const radius = (size / 2) - margin;
     const levels = 5;
-    const maxValue = 1; // Il valore massimo è SEMPRE 1 dopo la normalizzazione
 
     const svg = d3.select(svgRef.current).attr("width", size).attr("height", size);
     svg.selectAll("*").remove();
 
     const g = svg.append("g").attr("transform", `translate(${size / 2},${size / 2})`);
+    
+    const tooltip = d3.select(containerRef.current)
+      .append("div")
+      .attr("style", Object.entries(tooltipStyle).map(([k, v]) => `${k.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}:${v}`).join(';'))
+      .attr("class", "radarchart-tooltip");
 
-    const rScale = d3.scaleLinear().domain([0, maxValue]).range([0, radius]);
+
+   
+   
+    const rScale = d3.scaleLinear().domain([0, 1]).range([0, radius]);
     const colorScale = d3.scaleOrdinal(d3.schemeTableau10).domain(data.map(d => d.id));
     const angleSlice = (Math.PI * 2) / features.length;
 
-    // Disegno griglia (cerchi e assi)
+    // --- DISEGNO GRIGLIA E ASSI ---
     const gridWrapper = g.append("g").attr("class", "grid-wrapper");
+
     gridWrapper.selectAll(".levels").data(d3.range(1, levels + 1).reverse())
       .enter().append("circle").attr("class", "levels")
-      .attr("r", d => (radius / levels) * d)
-      .style("fill", "#CDCDCD").style("stroke", "#CDCDCD").style("fill-opacity", 0.05);
+      .attr("r", d => rScale(d / levels)) // La scala ora accetta un valore normalizzato
+      .style("fill", "#CDCDCD").style("stroke", "#CDCDCD").style("fill-opacity", 0.1);
+    
+    // *** MODIFICA CHIAVE 2: ETICHETTE DELLA GRIGLIA IN PERCENTUALE ***
+    gridWrapper.selectAll(".level-label").data(d3.range(1, levels + 1).reverse())
+      .enter().append("text").attr("class", "level-label")
+      .attr("x", 4).attr("y", d => -rScale(d / levels))
+      .attr("dy", "0.4em").style("font-size", "10px").attr("fill", "#737373")
+      .text(d => `${(100 * d / levels).toFixed(0)}%`); // Mostra 20%, 40%, etc.
 
     const axis = gridWrapper.selectAll(".axis").data(features).enter().append("g").attr("class", "axis");
+    
+    // Le linee degli assi ora si estendono fino al massimo della scala (1)
     axis.append("line")
       .attr("x1", 0).attr("y1", 0)
-      .attr("x2", (_, i) => rScale(maxValue * 1.1) * Math.cos(angleSlice * i - Math.PI / 2))
-      .attr("y2", (_, i) => rScale(maxValue * 1.1) * Math.sin(angleSlice * i - Math.PI / 2))
+      .attr("x2", (_, i) => rScale(1.05) * Math.cos(angleSlice * i - Math.PI / 2))
+      .attr("y2", (_, i) => rScale(1.05) * Math.sin(angleSlice * i - Math.PI / 2))
       .attr("class", "line").style("stroke", "grey").style("stroke-width", "1px");
 
     axis.append("text")
       .attr("class", "legend")
-      .style("font-size", "11px").attr("text-anchor", "middle")
+      .style("font-size", "12px").attr("text-anchor", "middle")
       .attr("dy", "0.35em")
-      .attr("x", (_, i) => rScale(maxValue * 1.2) * Math.cos(angleSlice * i - Math.PI / 2))
-      .attr("y", (_, i) => rScale(maxValue * 1.2) * Math.sin(angleSlice * i - Math.PI / 2))
-      .text(d => d);
-    
-    
+      .attr("x", (_, i) => rScale(1.1) * Math.cos(angleSlice * i - Math.PI / 2))
+      .attr("y", (_, i) => rScale(1.1) * Math.sin(angleSlice * i - Math.PI / 2))
+      .text(d => d)
+      .call(wrap, 80);
+
+    // --- DISEGNO DEI DATI ---
     const radarLine = d3.lineRadial()
-      .radius(d => rScale(d.value))
+      .radius(d => rScale(d.value)) // Usa il valore normalizzato
       .angle((_, i) => i * angleSlice)
       .curve(d3.curveLinearClosed);
     
+   
     data.forEach(node => {
-      // Per ogni nodo, calcoliamo i suoi valori normalizzati
-      const normalizedValues = features.map(feature => ({
-        axis: feature, 
-        value: (node[feature] || 0) / featureMaxDomains[feature]
-      }));
+      // Calcola la somma totale dei valori solo per questo 'node'
+      const total = features.reduce((acc, feature) => acc + (node[feature] || 0), 0);
+
+      const nodeData = features.map(feature => {
+        const originalValue = node[feature] || 0;
+        // Normalizza il valore: lo trasforma in una frazione del totale (es. 0.6 per il 60%)
+        // Se il totale è 0, il valore normalizzato è 0 per evitare divisione per zero.
+        const normalizedValue = total > 0 ? originalValue / total : 0;
+        
+        return {
+          axis: feature, 
+          value: normalizedValue,    // Valore usato per il disegno (da 0 a 1)
+          originalValue: originalValue // Valore originale conservato per il tooltip
+        };
+      });
 
       const nodeColor = colorScale(node.id);
+
+      // Il resto della logica di disegno rimane invariato, ma ora usa i dati normalizzati
       g.append("path")
-        .datum(normalizedValues)
-        .attr("d", radarLine)
-        .style("stroke", nodeColor).style("fill", nodeColor)
-        .style("fill-opacity", 0.00).style("stroke-width", 4);
+        .datum(nodeData).attr("d", radarLine)
+        .style("fill", nodeColor).style("fill-opacity", 0.15);
+
+      g.append("path")
+        .datum(nodeData).attr("d", radarLine)
+        .style("stroke", nodeColor).style("stroke-width", 3).style("fill", "none");
+        
+      g.selectAll(`.dot-${node.id.replace(/\s+/g, '-')}`)
+        .data(nodeData)
+        .enter().append("circle")
+        .attr("class", `dot-${node.id.replace(/\s+/g, '-')}`)
+        .attr("r", 5)
+        .attr("cx", (d, i) => rScale(d.value) * Math.cos(angleSlice * i - Math.PI / 2))
+        .attr("cy", (d, i) => rScale(d.value) * Math.sin(angleSlice * i - Math.PI / 2))
+        .style("fill", nodeColor).style("fill-opacity", 0.8).style("cursor", "pointer")
+        // *** MODIFICA CHIAVE 4: TOOLTIP PIÙ INFORMATIVO ***
+        .on("mouseover", (event, d) => {
+          tooltip.transition().duration(200).style("opacity", 1);
+          const percentage = (d.value * 100).toFixed(1);
+          tooltip.html(`<strong>${d.axis}</strong><br>${d.originalValue.toFixed(2)} (${percentage}%)`)
+            .style("left", `${event.pageX + 15}px`).style("top", `${event.pageY - 15}px`);
+        })
+        .on("mousemove", (event) => {
+          tooltip.style("left", `${event.pageX + 15}px`).style("top", `${event.pageY - 15}px`);
+        })
+        .on("mouseout", () => {
+          tooltip.transition().duration(500).style("opacity", 0);
+        });
     });
 
-  }, [data, features, dimensions, featureMaxDomains]);
+    return () => {
+        d3.select(containerRef.current).select(".radarchart-tooltip").remove();
+    };
+
+  }, [data, features, dimensions]); 
+
+  // Funzione helper wrap 
+  function wrap(text, width) {
+    text.each(function() {
+      var text = d3.select(this),
+          words = text.text().split(/\s+/).reverse(),
+          word,
+          line = [],
+          lineNumber = 0,
+          lineHeight = 1.1, // ems
+          y = text.attr("y"),
+          dy = parseFloat(text.attr("dy")),
+          tspan = text.text(null).append("tspan").attr("x", text.attr("x")).attr("y", y).attr("dy", dy + "em");
+      while (word = words.pop()) {
+        line.push(word);
+        tspan.text(line.join(" "));
+        if (tspan.node().getComputedTextLength() > width) {
+          line.pop();
+          tspan.text(line.join(" "));
+          line = [word];
+          tspan = text.append("tspan").attr("x", text.attr("x")).attr("y", y).attr("dy", ++lineNumber * lineHeight + dy + "em").text(word);
+        }
+      }
+    });
+  }
 
   return (
-    <Box ref={containerRef} sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
-      <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-        Nodi Visualizzati: {data?.length ?? 0}
-      </Typography>
-      <svg ref={svgRef}></svg>
+    // JSX del componente 
+    <Box ref={containerRef} sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      <Paper elevation={0} sx={{width: '100%', p:1}}>
+        <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, textAlign: 'center' }}>
+          Visualizzazione Radar
+        </Typography>
+      </Paper>
+      <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+        <svg ref={svgRef}></svg>
+      </Box>
     </Box>
   );
 }
