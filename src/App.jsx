@@ -14,7 +14,8 @@ import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 // --- Import dei Componenti Grafico ---
 import RadvizChart from './components/RadvizChart';
 import RadarChart from './components/radarChart';
-import BarChart from './components/barChart';
+// --- MODIFICA 1: Rimuovi l'import del BarChart ---
+// import BarChart from './components/barChart'; 
 import StackedBarChart from './components/stackedBarChart';
 import PieChart from './components/pieChart';
 
@@ -167,27 +168,19 @@ function App() {
     }
   }, [slicedData, selectedNodes, features]);
 
-  // --- MODIFICA CHIAVE QUI ---
   const handleBarClick = useCallback((clickedNodeName) => {
-    // 1. Chiudi il pannello laterale se è aperto
     if (isMenuOpen) {
       setIsMenuOpen(false);
     }
-    
-    // 2. Seleziona il nodo (logica esistente)
     handleNodeSelection(clickedNodeName);
-    
-    // 3. Chiudi il modale se un grafico è ingrandito (logica esistente)
     if (zoomedChart) { handleZoom(null); }
-    
-    // 4. Esegui lo scroll verso il grafico a torta corrispondente (logica esistente)
     setTimeout(() => {
       const nodeIndex = slicedData.findIndex(node => node.name === clickedNodeName);
       if (nodeIndex !== -1 && pieChartRefs.current[nodeIndex]?.current) {
         pieChartRefs.current[nodeIndex].current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
       }
-    }, 100); // Ritardo per permettere la transizione di chiusura del pannello
-  }, [slicedData, handleNodeSelection, zoomedChart, isMenuOpen]); // Aggiungi isMenuOpen alle dipendenze
+    }, 100);
+  }, [slicedData, handleNodeSelection, zoomedChart, isMenuOpen]);
 
   const handleZoom = (chartKey) => setZoomedChart(current => (current === chartKey ? null : chartKey));
   const hoveredNodeChanged = useCallback((node) => setHoveredNode(node), []);
@@ -211,7 +204,8 @@ function App() {
   // --- Definizione dei Componenti Grafico da Renderizzare ---
   const chartComponents = {
     radviz: <RadvizChart changeType={changeType} data={slicedData} features={visibleFeatures} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={handleNodeSelection}/>,
-    bar: <BarChart hoveredNode={hoveredNode} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} features={visibleFeatures} colorScale={colorScale} />,
+    // --- MODIFICA 2: Rimuovi la definizione del BarChart ---
+    // bar: <BarChart hoveredNode={hoveredNode} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} features={visibleFeatures} colorScale={colorScale} />,
     radar: <RadarChart data={slicedData} features={visibleFeatures} type={type} />,
     stacked: <StackedBarChart data={slicedData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} hoveredNode={hoveredNode} onBarClick={handleBarClick} />,
     pie: (
@@ -225,7 +219,6 @@ function App() {
           overflow: 'hidden',
           boxSizing: 'border-box',
         }}
-        // Calcolo dinamico delle colonne in base al numero di pie chart
         style={{
           gridTemplateColumns: `repeat(${Math.ceil(Math.sqrt(slicedData.length || 1))}, 1fr)`,
           gridTemplateRows: `repeat(${Math.ceil(slicedData.length / Math.ceil(Math.sqrt(slicedData.length || 1)))}, 1fr)`
@@ -334,9 +327,10 @@ function App() {
               <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('radviz')} elevation={2} sx={{ width: '100%', height: '100%', p: 1, overflow: 'hidden', display: 'flex' }}>{chartComponents.radviz}</Paper></Tooltip>
             </Box>
             <Box sx={{ width: '55%', height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {/* --- MODIFICA 3: Modifica il layout per il PieChart --- */}
               <Box sx={{ display: 'flex', height: '50%', gap: 2 }}>
-                <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('pie')} elevation={2} sx={{ width: '70%', height: '100%', p: 1, overflow: 'hidden' }}>{chartComponents.pie}</Paper></Tooltip>
-                <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('bar')} elevation={2} sx={{ width: '30%', height: '100%', p: 1, overflow: 'hidden' }}>{chartComponents.bar}</Paper></Tooltip>
+                {/* Imposta la larghezza del Paper del PieChart al 100% e rimuovi il BarChart */}
+                <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('pie')} elevation={2} sx={{ width: '100%', height: '100%', p: 1, overflow: 'hidden' }}>{chartComponents.pie}</Paper></Tooltip>
               </Box>
               <Box sx={{ display: 'flex', height: '50%', gap: 2 }}>
                 <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('stacked')} elevation={2} sx={{ width: '70%', height: '100%', p: 1, overflow: 'hidden' }}>{chartComponents.stacked}</Paper></Tooltip>

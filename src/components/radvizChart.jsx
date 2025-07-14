@@ -180,7 +180,7 @@ export default function RadvizChart(props) {
                         alignItems: 'center', textAlign: 'center',
                      }}
                 >
-                    <Typography variant="subtitle2" component="div">{trulyHoveredNode.name}</Typography>
+                    <Typography variant="h5" component="div">{trulyHoveredNode.name}</Typography>
                     <Typography variant="body2" color="text.secondary">
                         Effectiveness Error: {trulyHoveredNode.errorE != null ? trulyHoveredNode.errorE.toFixed(4) : 'N/A'}
                     </Typography>
