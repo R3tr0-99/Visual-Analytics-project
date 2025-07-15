@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import * as d3 from 'd3';
 import { Box, Typography, Paper } from "@mui/material";
 
+// --- MODIFICA 1: Ripristino della logica del tooltip ---
 const tooltipStyle = {
   position: 'absolute',
   textAlign: 'center',
@@ -31,8 +32,6 @@ export default function RadarChart({ data, features }) {
     return () => resizeObserver.disconnect();
   }, []);
 
-  
-
   useEffect(() => {
     const { width, height } = dimensions;
     if (!svgRef.current || features.length < 2 || !data || data.length === 0 || width === 0 || height === 0) {
@@ -50,14 +49,12 @@ export default function RadarChart({ data, features }) {
 
     const g = svg.append("g").attr("transform", `translate(${size / 2},${size / 2})`);
     
+    // Ripristino della creazione del div per il tooltip
     const tooltip = d3.select(containerRef.current)
       .append("div")
       .attr("style", Object.entries(tooltipStyle).map(([k, v]) => `${k.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}:${v}`).join(';'))
       .attr("class", "radarchart-tooltip");
 
-
-   
-   
     const rScale = d3.scaleLinear().domain([0, 1]).range([0, radius]);
     const colorScale = d3.scaleOrdinal(d3.schemeTableau10).domain(data.map(d => d.id));
     const angleSlice = (Math.PI * 2) / features.length;
@@ -67,19 +64,17 @@ export default function RadarChart({ data, features }) {
 
     gridWrapper.selectAll(".levels").data(d3.range(1, levels + 1).reverse())
       .enter().append("circle").attr("class", "levels")
-      .attr("r", d => rScale(d / levels)) // La scala ora accetta un valore normalizzato
+      .attr("r", d => rScale(d / levels))
       .style("fill", "#CDCDCD").style("stroke", "#CDCDCD").style("fill-opacity", 0.1);
     
-    // *** MODIFICA CHIAVE 2: ETICHETTE DELLA GRIGLIA IN PERCENTUALE ***
     gridWrapper.selectAll(".level-label").data(d3.range(1, levels + 1).reverse())
       .enter().append("text").attr("class", "level-label")
       .attr("x", 4).attr("y", d => -rScale(d / levels))
       .attr("dy", "0.4em").style("font-size", "10px").attr("fill", "#737373")
-      .text(d => `${(100 * d / levels).toFixed(0)}%`); // Mostra 20%, 40%, etc.
+      .text(d => `${(100 * d / levels).toFixed(0)}%`);
 
     const axis = gridWrapper.selectAll(".axis").data(features).enter().append("g").attr("class", "axis");
     
-    // Le linee degli assi ora si estendono fino al massimo della scala (1)
     axis.append("line")
       .attr("x1", 0).attr("y1", 0)
       .attr("x2", (_, i) => rScale(1.05) * Math.cos(angleSlice * i - Math.PI / 2))
@@ -97,48 +92,40 @@ export default function RadarChart({ data, features }) {
 
     // --- DISEGNO DEI DATI ---
     const radarLine = d3.lineRadial()
-      .radius(d => rScale(d.value)) // Usa il valore normalizzato
+      .radius(d => rScale(d.value))
       .angle((_, i) => i * angleSlice)
       .curve(d3.curveLinearClosed);
     
-   
     data.forEach(node => {
-      // Calcola la somma totale dei valori solo per questo 'node'
       const total = features.reduce((acc, feature) => acc + (node[feature] || 0), 0);
-
       const nodeData = features.map(feature => {
         const originalValue = node[feature] || 0;
-        // Normalizza il valore: lo trasforma in una frazione del totale (es. 0.6 per il 60%)
-        // Se il totale è 0, il valore normalizzato è 0 per evitare divisione per zero.
         const normalizedValue = total > 0 ? originalValue / total : 0;
-        
         return {
           axis: feature, 
-          value: normalizedValue,    // Valore usato per il disegno (da 0 a 1)
-          originalValue: originalValue // Valore originale conservato per il tooltip
+          value: normalizedValue,
+          originalValue: originalValue
         };
       });
-
       const nodeColor = colorScale(node.id);
 
-      // Il resto della logica di disegno rimane invariato, ma ora usa i dati normalizzati
-      g.append("path")
-        .datum(nodeData).attr("d", radarLine)
-        .style("fill", nodeColor).style("fill-opacity", 0.15);
-
+      // Disegna solo il contorno, senza riempimento.
       g.append("path")
         .datum(nodeData).attr("d", radarLine)
         .style("stroke", nodeColor).style("stroke-width", 3).style("fill", "none");
         
-      g.selectAll(`.dot-${node.id.replace(/\s+/g, '-')}`)
+      // --- MODIFICA 2: Aggiunta di cerchi TRASPARENTI per l'hover ---
+      // Questi cerchi sono invisibili ma servono come area di "aggancio" per il mouse.
+      g.selectAll(`.hover-dot-${node.id.replace(/\s+/g, '-')}`)
         .data(nodeData)
         .enter().append("circle")
-        .attr("class", `dot-${node.id.replace(/\s+/g, '-')}`)
-        .attr("r", 5)
+        .attr("class", `hover-dot-${node.id.replace(/\s+/g, '-')}`)
+        .attr("r", 6) // Raggio ampio per facilitare l'hover
         .attr("cx", (d, i) => rScale(d.value) * Math.cos(angleSlice * i - Math.PI / 2))
         .attr("cy", (d, i) => rScale(d.value) * Math.sin(angleSlice * i - Math.PI / 2))
-        .style("fill", nodeColor).style("fill-opacity", 0.8).style("cursor", "pointer")
-        // *** MODIFICA CHIAVE 4: TOOLTIP PIÙ INFORMATIVO ***
+        .style("fill", "transparent") // Reso invisibile
+        .style("stroke", "none")
+        .style("cursor", "pointer")
         .on("mouseover", (event, d) => {
           tooltip.transition().duration(200).style("opacity", 1);
           const percentage = (d.value * 100).toFixed(1);
@@ -153,6 +140,7 @@ export default function RadarChart({ data, features }) {
         });
     });
 
+    // Ripristino della funzione di cleanup per il tooltip
     return () => {
         d3.select(containerRef.current).select(".radarchart-tooltip").remove();
     };
@@ -185,7 +173,6 @@ export default function RadarChart({ data, features }) {
   }
 
   return (
-    // JSX del componente 
     <Box ref={containerRef} sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
       <Paper elevation={0} sx={{width: '100%', p:1}}>
         <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500, textAlign: 'center' }}>

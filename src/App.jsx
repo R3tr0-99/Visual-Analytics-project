@@ -14,10 +14,9 @@ import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 // --- Import dei Componenti Grafico ---
 import RadvizChart from './components/RadvizChart';
 import RadarChart from './components/radarChart';
-// --- MODIFICA 1: Rimuovi l'import del BarChart ---
-// import BarChart from './components/barChart'; 
 import StackedBarChart from './components/stackedBarChart';
 import PieChart from './components/pieChart';
+import Legend from './components/Legend'; // <-- MODIFICA: Importa il nuovo componente Legend
 
 // --- Import dei Servizi e Contenuti Esterni ---
 import infoContent from './data-types-info.json';
@@ -204,47 +203,54 @@ function App() {
   // --- Definizione dei Componenti Grafico da Renderizzare ---
   const chartComponents = {
     radviz: <RadvizChart changeType={changeType} data={slicedData} features={visibleFeatures} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={handleNodeSelection}/>,
-    // --- MODIFICA 2: Rimuovi la definizione del BarChart ---
-    // bar: <BarChart hoveredNode={hoveredNode} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} features={visibleFeatures} colorScale={colorScale} />,
     radar: <RadarChart data={slicedData} features={visibleFeatures} type={type} />,
     stacked: <StackedBarChart data={slicedData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} hoveredNode={hoveredNode} onBarClick={handleBarClick} />,
+    // <-- MODIFICA: La vista 'pie' ora include la legenda e la griglia.
     pie: (
-      <Box
-        sx={{
-          display: 'grid',
-          height: '100%',
-          width: '100%',
-          p: 1,
-          gap: 1,
-          overflow: 'hidden',
-          boxSizing: 'border-box',
-        }}
-        style={{
-          gridTemplateColumns: `repeat(${Math.ceil(Math.sqrt(slicedData.length || 1))}, 1fr)`,
-          gridTemplateRows: `repeat(${Math.ceil(slicedData.length / Math.ceil(Math.sqrt(slicedData.length || 1)))}, 1fr)`
-        }}
-      >
-        {slicedData.map((node, index) => (
-          <Paper
-            key={node.id}
-            ref={pieChartRefs.current[index]}
-            elevation={2}
-            sx={{
-              width: '100%',
-              height: '100%',
-              overflow: 'hidden',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minWidth: 0,
-              minHeight: 0,
-              boxSizing: 'border-box',
-            }}
-          >
-            <PieChart title={`${node.name || node.id}`} data={visibleFeatures.map(key => ({ label: key, value: node[key] }))} colorScale={colorScale} />
-          </Paper>
-        ))}
-      </Box>
+        <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+            {/* Legenda unica in cima */}
+            <Legend features={visibleFeatures} colorScale={colorScale} />
+            
+            {/* Griglia di PieChart che occupa lo spazio rimanente */}
+            <Box
+              sx={{
+                display: 'grid',
+                flexGrow: 1, // Occupa lo spazio rimanente
+                width: '100%',
+                p: 1,
+                gap: 1,
+                overflow: 'hidden',
+                boxSizing: 'border-box',
+                minHeight: 0 // Cruciale per il corretto funzionamento di flex-grow
+              }}
+              style={{
+                gridTemplateColumns: `repeat(${Math.ceil(Math.sqrt(slicedData.length || 1))}, 1fr)`,
+                gridTemplateRows: `repeat(${Math.ceil(slicedData.length / Math.ceil(Math.sqrt(slicedData.length || 1)))}, 1fr)`
+              }}
+            >
+              {slicedData.map((node, index) => (
+                <Paper
+                  key={node.id}
+                  ref={pieChartRefs.current[index]}
+                  elevation={2}
+                  sx={{
+                    width: '100%',
+                    height: '100%',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: 0,
+                    minHeight: 0,
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  {/* Il componente PieChart ora non ha più la sua legenda interna */}
+                  <PieChart title={`${node.name || node.id}`} data={visibleFeatures.map(key => ({ label: key, value: node[key] }))} colorScale={colorScale} />
+                </Paper>
+              ))}
+            </Box>
+        </Box>
     )
   };
 
@@ -327,9 +333,8 @@ function App() {
               <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('radviz')} elevation={2} sx={{ width: '100%', height: '100%', p: 1, overflow: 'hidden', display: 'flex' }}>{chartComponents.radviz}</Paper></Tooltip>
             </Box>
             <Box sx={{ width: '55%', height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {/* --- MODIFICA 3: Modifica il layout per il PieChart --- */}
               <Box sx={{ display: 'flex', height: '50%', gap: 2 }}>
-                {/* Imposta la larghezza del Paper del PieChart al 100% e rimuovi il BarChart */}
+                 {/* <-- MODIFICA: Il Paper ora contiene il componente 'pie' che include la legenda */}
                 <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('pie')} elevation={2} sx={{ width: '100%', height: '100%', p: 1, overflow: 'hidden' }}>{chartComponents.pie}</Paper></Tooltip>
               </Box>
               <Box sx={{ display: 'flex', height: '50%', gap: 2 }}>
