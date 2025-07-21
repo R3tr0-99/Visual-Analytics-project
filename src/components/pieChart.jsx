@@ -1,8 +1,13 @@
 import React, { useRef, useEffect } from "react";
 import * as d3 from "d3";
 
-// Il margine ora serve solo per il titolo, quindi può essere più piccolo
-export default function PieChart({ data, title, colorScale: providedColorScale, margin = { top: 30, right: 20, bottom: 20, left: 20 } }) {
+// Il margine di default è stato modificato per rimuovere lo spazio laterale
+export default function PieChart({ 
+  data, 
+  title, 
+  colorScale: providedColorScale, 
+  margin = { top: 30, right: 0, bottom: 20, left: 0 } // <-- MODIFICA QUI
+}) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
 
@@ -24,15 +29,23 @@ export default function PieChart({ data, title, colorScale: providedColorScale, 
         return;
     }
    
+    // Ottieni le dimensioni complete del contenitore
     const { width: fullWidth, height: fullHeight } = containerRef.current.getBoundingClientRect();
+    
+    // Calcola l'area di disegno sottraendo i margini
+    // Con margin.left/right = 0, 'width' sarà uguale a 'fullWidth'
     const width = fullWidth - margin.left - margin.right;
     const height = fullHeight - margin.top - margin.bottom;
+    
+    // Il raggio è basato sulla dimensione più piccola per garantire che il cerchio si adatti
     const radius = Math.min(width, height) / 2;
 
     svg.attr("width", fullWidth).attr("height", fullHeight);
     svg.selectAll("*").remove();
 
-    // Centra il gruppo del grafico nello spazio disponibile
+    // Centra il gruppo del grafico nello spazio totale disponibile.
+    // L'asse X è centrato su 'fullWidth / 2'.
+    // L'asse Y è centrato sull'altezza disponibile dopo aver considerato il margine superiore.
     const g = svg.append("g")
       .attr("transform", `translate(${fullWidth / 2}, ${margin.top + height / 2})`);
 
@@ -49,18 +62,15 @@ export default function PieChart({ data, title, colorScale: providedColorScale, 
         .attr("stroke", "white")
         .style("stroke-width", "2px");
 
-    // --- LOGICA ETICHETTE E LEGENDA COMPLETAMENTE RIMOSSA ---
-
-    // Aggiunge solo il titolo
+    // Aggiunge il titolo centrato nella parte superiore dell'SVG
     svg.append("text")
         .attr("x", fullWidth / 2)
-        .attr("y", margin.top / 2 + 5) // Posiziona il titolo in alto
+        .attr("y", margin.top / 2 + 5) 
         .attr("text-anchor", "middle")
         .style("font-size", "14px")
         .style("font-weight", "bold")
         .style("fill", "#333")
         .text(title || "Node Distribution");
-
 
   }, [data, title, providedColorScale, margin]);
 

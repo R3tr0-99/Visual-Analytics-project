@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, createRef, useRef, Fragment } from 'react';
+import { useCallback, useEffect, useMemo, useState, createRef, useRef, Fragment, useLayoutEffect } from 'react';
+import * as d3 from 'd3';
 
 // --- Import dei Componenti UI ---
 import {
   Typography, Box, ToggleButton, ToggleButtonGroup, Container, Slider, Modal, IconButton, Tooltip,
-  Paper, Button, FormGroup, FormControlLabel, Checkbox, Divider, CircularProgress, Chip
+  Paper, Button, FormGroup, FormControlLabel, Checkbox, CircularProgress, Chip
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -16,7 +17,7 @@ import RadvizChart from './components/RadvizChart';
 import RadarChart from './components/radarChart';
 import StackedBarChart from './components/stackedBarChart';
 import PieChart from './components/pieChart';
-import Legend from './components/Legend'; // <-- MODIFICA: Importa il nuovo componente Legend
+import Legend from './components/Legend';
 
 // --- Import dei Servizi e Contenuti Esterni ---
 import infoContent from './data-types-info.json';
@@ -74,18 +75,21 @@ function App() {
   const [isClassifying, setIsClassifying] = useState(false);
   const [classifiedByAI, setClassifiedByAI] = useState(false);
 
-  // useRef per assicurare che il test API venga eseguito una sola volta
+  // --- NUOVI STATI E REF PER LA GRIGLIA DINAMICA ---
+  const gridContainerRef = useRef(null);
+  const [gridDimensions, setGridDimensions] = useState({ cols: 1, rows: 1 });
+
   const apiTestRun = useRef(false);
 
-  // --- Hook per il Test dell'API (eseguito solo una volta in sviluppo) ---
+  // --- Hook per il Test dell'API ---
   useEffect(() => {
     if (import.meta.env.DEV && !apiTestRun.current) {
       runApiTest();
-      apiTestRun.current = true; // Imposta il flag per prevenire esecuzioni future
+      apiTestRun.current = true;
     }
   }, []);
 
-  // --- Hook per Caricare la Lista dei File disponibili ---
+  // --- Hook per Caricare la Lista dei File ---
   useEffect(() => {
     fetch('/data/files.json')
       .then((res) => res.json())
@@ -93,51 +97,28 @@ function App() {
       .catch((err) => console.error("Errore nel caricamento di files.json:", err));
   }, []);
   
-  // --- Hook Principale: Carica e Classifica i Dati quando un file viene selezionato ---
+  // --- Hook Principale per il Caricamento Dati ---
   useEffect(() => {
     if (!selectedFile) {
-      setCsvData([]);
-      setFeatures([]);
-      setDataTypeId(null);
-      setClassifiedByAI(false);
+      setCsvData([]); setFeatures([]); setDataTypeId(null); setClassifiedByAI(false);
       return;
     }
-
     const processFile = async () => {
-      setIsClassifying(true);
-      setDataTypeId(null);
-      setClassifiedByAI(false);
-
+      setIsClassifying(true); setDataTypeId(null); setClassifiedByAI(false);
       try {
         const { parsedData, features, dataTypeId, classifiedByAI } = await loadAndClassifyData(selectedFile);
-        
-        setCsvData(parsedData);
-        setFeatures(features);
-        setVisibleFeatures(features);
-        setNumberOfRows(parsedData.length);
-        setSelectedNodes([]);
-        setDataTypeId(dataTypeId);
-        setClassifiedByAI(classifiedByAI);
-
+        setCsvData(parsedData); setFeatures(features); setVisibleFeatures(features);
+        setNumberOfRows(parsedData.length); setSelectedNodes([]); setDataTypeId(dataTypeId); setClassifiedByAI(classifiedByAI);
       } catch (error) {
         console.error("Errore durante il processo di caricamento:", error);
-        setDataTypeId('insufficienti');
-        setCsvData([]);
-        setFeatures([]);
-      } finally {
-        setIsClassifying(false);
-      }
+        setDataTypeId('insufficienti'); setCsvData([]); setFeatures([]);
+      } finally { setIsClassifying(false); }
     };
-
     processFile();
   }, [selectedFile]);
 
-  // --- Valori Derivati e Memoizzati ---
-  const currentDataTypeInfo = useMemo(() => {
-    if (!dataTypeId) return null;
-    return infoContent.find(item => item.id === dataTypeId);
-  }, [dataTypeId]);
-
+  
+  const currentDataTypeInfo = useMemo(() => infoContent.find(item => item.id === dataTypeId), [dataTypeId]);
   const slicedData = useMemo(() => {
     if (!csvData || csvData.length === 0) return [];
     const count = Math.min(Math.max(1, numberOfRows || 0), csvData.length);
@@ -152,6 +133,41 @@ function App() {
     if (features.length === 0) return null;
     return d3.scaleOrdinal().domain(features).range(d3.schemeTableau10);
   }, [features]);
+
+  // --- CALCOLARE LE DIMENSIONI DELLA GRIGLIA ---
+  useLayoutEffect(() => {
+    const calculateGrid = () => {
+      if (!gridContainerRef.current || slicedData.length === 0) return;
+
+      const { width, height } = gridContainerRef.current.getBoundingClientRect();
+      if (width === 0 || height === 0) return;
+
+      let bestConfig = { cols: slicedData.length, rows: 1, ratioDiff: Infinity };
+
+      for (let cols = 1; cols <= slicedData.length; cols++) {
+        const rows = Math.ceil(slicedData.length / cols);
+        const cellWidth = width / cols;
+        const cellHeight = height / rows;
+        const cellRatio = cellWidth / cellHeight;
+        const ratioDiff = Math.abs(cellRatio - 1);
+
+        if (ratioDiff < bestConfig.ratioDiff) {
+          bestConfig = { cols, rows, ratioDiff };
+        }
+      }
+      setGridDimensions({ cols: bestConfig.cols, rows: bestConfig.rows });
+    };
+
+    calculateGrid(); 
+    
+    // Usa ResizeObserver per ricalcolare quando la dimensione del contenitore cambia
+    const resizeObserver = new ResizeObserver(calculateGrid);
+    if (gridContainerRef.current) {
+      resizeObserver.observe(gridContainerRef.current);
+    }
+
+    return () => resizeObserver.disconnect();
+  }, [slicedData.length]); // Si aggiorna solo quando cambia il numero di elementi
 
   // --- Callback per l'Interattività ---
   const handleNodeSelection = useCallback((nodeName) => {
@@ -168,9 +184,7 @@ function App() {
   }, [slicedData, selectedNodes, features]);
 
   const handleBarClick = useCallback((clickedNodeName) => {
-    if (isMenuOpen) {
-      setIsMenuOpen(false);
-    }
+    if (isMenuOpen) { setIsMenuOpen(false); }
     handleNodeSelection(clickedNodeName);
     if (zoomedChart) { handleZoom(null); }
     setTimeout(() => {
@@ -185,47 +199,39 @@ function App() {
   const hoveredNodeChanged = useCallback((node) => setHoveredNode(node), []);
   const changeType = useCallback((typeTmp) => setType(typeTmp), []);
   const handleRandomSelection = useCallback(() => {
-    if (csvData.length === 0) return;
-    setNumberOfRows(Math.floor(Math.random() * csvData.length) + 1);
+    if (csvData.length > 0) { setNumberOfRows(Math.floor(Math.random() * csvData.length) + 1); }
   }, [csvData.length]);
 
   const handleFeatureToggle = useCallback((featureToToggle) => {
-    setVisibleFeatures(currentVisible => {
-      const isVisible = currentVisible.includes(featureToToggle);
-      if (isVisible) {
-        return currentVisible.length <= 2 ? currentVisible : currentVisible.filter(f => f !== featureToToggle);
-      } else {
-        return [...currentVisible, featureToToggle];
-      }
+    setVisibleFeatures(current => {
+      const isVisible = current.includes(featureToToggle);
+      return isVisible ? (current.length > 2 ? current.filter(f => f !== featureToToggle) : current) : [...current, featureToToggle];
     });
   }, []);
 
-  // --- Definizione dei Componenti Grafico da Renderizzare ---
+  // --- Definizione dei Componenti Grafico ---
   const chartComponents = {
     radviz: <RadvizChart changeType={changeType} data={slicedData} features={visibleFeatures} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={handleNodeSelection}/>,
     radar: <RadarChart data={slicedData} features={visibleFeatures} type={type} />,
     stacked: <StackedBarChart data={slicedData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} hoveredNode={hoveredNode} onBarClick={handleBarClick} />,
-    // <-- MODIFICA: La vista 'pie' ora include la legenda e la griglia.
     pie: (
         <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-            {/* Legenda unica in cima */}
             <Legend features={visibleFeatures} colorScale={colorScale} />
             
-            {/* Griglia di PieChart che occupa lo spazio rimanente */}
             <Box
+              ref={gridContainerRef} 
               sx={{
                 display: 'grid',
-                flexGrow: 1, // Occupa lo spazio rimanente
+                flexGrow: 1,
                 width: '100%',
                 p: 1,
-                gap: 1,
-                overflow: 'hidden',
+                gap: 1.5,
+                overflow: 'hidden', 
                 boxSizing: 'border-box',
-                minHeight: 0 // Cruciale per il corretto funzionamento di flex-grow
-              }}
-              style={{
-                gridTemplateColumns: `repeat(${Math.ceil(Math.sqrt(slicedData.length || 1))}, 1fr)`,
-                gridTemplateRows: `repeat(${Math.ceil(slicedData.length / Math.ceil(Math.sqrt(slicedData.length || 1)))}, 1fr)`
+                minHeight: 0,
+                
+                gridTemplateColumns: `repeat(${gridDimensions.cols}, 1fr)`,
+                gridTemplateRows: `repeat(${gridDimensions.rows}, 1fr)`,
               }}
             >
               {slicedData.map((node, index) => (
@@ -234,6 +240,7 @@ function App() {
                   ref={pieChartRefs.current[index]}
                   elevation={2}
                   sx={{
+                    // <-- riempie cella griglia
                     width: '100%',
                     height: '100%',
                     overflow: 'hidden',
@@ -243,10 +250,15 @@ function App() {
                     minWidth: 0,
                     minHeight: 0,
                     boxSizing: 'border-box',
+                    borderRadius: '12px'
                   }}
                 >
-                  {/* Il componente PieChart ora non ha più la sua legenda interna */}
-                  <PieChart title={`${node.name || node.id}`} data={visibleFeatures.map(key => ({ label: key, value: node[key] }))} colorScale={colorScale} />
+                  <PieChart 
+                    title={`${node.name || node.id}`} 
+                    data={visibleFeatures.map(key => ({ label: key, value: node[key] }))} 
+                    colorScale={colorScale}
+                    margin={{ top: 25, right: 5, bottom: 5, left: 5 }}
+                  />
                 </Paper>
               ))}
             </Box>
@@ -274,8 +286,7 @@ function App() {
 
             {isClassifying ? (
               <Paper variant="outlined" sx={{ width: '90%', p: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, bgcolor: 'action.hover' }}>
-                <CircularProgress size={24} />
-                <Typography variant="body2" color="text.secondary">Classificazione dati...</Typography>
+                <CircularProgress size={24} /> <Typography variant="body2" color="text.secondary">Classificazione dati...</Typography>
               </Paper>
             ) : currentDataTypeInfo && (
               <Paper variant="outlined" sx={{ width: '90%', textAlign: 'center', p: 2, bgcolor: 'action.hover', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
@@ -286,16 +297,7 @@ function App() {
                   <Typography variant="subtitle1" component="div" fontWeight={600}>Proprietà Dati</Typography>
                 </Box>
                 <Typography variant="body2" color="text.secondary">{currentDataTypeInfo.title}</Typography>
-                {classifiedByAI && (
-                  <Chip
-                    icon={<SmartToyOutlinedIcon fontSize="small" />}
-                    label="Classificato con AI"
-                    size="small"
-                    color="primary"
-                    variant="outlined"
-                    sx={{ mt: 1 }}
-                  />
-                )}
+                {classifiedByAI && ( <Chip icon={<SmartToyOutlinedIcon fontSize="small" />} label="Classificato con AI" size="small" color="primary" variant="outlined" sx={{ mt: 1 }} /> )}
               </Paper>
             )}
             
@@ -334,7 +336,6 @@ function App() {
             </Box>
             <Box sx={{ width: '55%', height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Box sx={{ display: 'flex', height: '50%', gap: 2 }}>
-                 {/* <-- MODIFICA: Il Paper ora contiene il componente 'pie' che include la legenda */}
                 <Tooltip title="Doppio click per ingrandire"><Paper onDoubleClick={() => handleZoom('pie')} elevation={2} sx={{ width: '100%', height: '100%', p: 1, overflow: 'hidden' }}>{chartComponents.pie}</Paper></Tooltip>
               </Box>
               <Box sx={{ display: 'flex', height: '50%', gap: 2 }}>
@@ -355,22 +356,14 @@ function App() {
 
       <Modal open={isInfoModalOpen} onClose={() => setIsInfoModalOpen(false)} aria-labelledby="info-modal-title">
         <Box sx={infoModalStyle}>
-          <IconButton aria-label="close" onClick={() => setIsInfoModalOpen(false)} sx={{ position: 'absolute', right: 8, top: 8, color: (theme) => theme.palette.grey[500] }}>
-            <CloseIcon />
-          </IconButton>
-          <Typography id="info-modal-title" variant="h5" component="h2" gutterBottom>
-            Spiegazione dei Tipi di Dati
-          </Typography>
+          <IconButton aria-label="close" onClick={() => setIsInfoModalOpen(false)} sx={{ position: 'absolute', right: 8, top: 8, color: (theme) => theme.palette.grey[500] }}> <CloseIcon /> </IconButton>
+          <Typography id="info-modal-title" variant="h5" component="h2" gutterBottom>Spiegazione dei Tipi di Dati</Typography>
           <Box id="info-modal-description" sx={{ mt: 2 }}>
             {infoContent.map((item) => (
               <Fragment key={item.id}>
                 <Paper elevation={item.id === dataTypeId ? 3 : 0} variant={item.id === dataTypeId ? 'elevation' : 'outlined'} sx={{ p: 2, mb: 2, transition: 'all 0.3s', borderColor: item.id === dataTypeId ? 'primary.main' : 'divider' }}>
-                  <Typography variant="h6" component="h3" sx={{ fontWeight: 'bold' }}>
-                    {item.title}
-                  </Typography>
-                  <Typography variant="body1" color="text.secondary">
-                    {item.description}
-                  </Typography>
+                  <Typography variant="h6" component="h3" sx={{ fontWeight: 'bold' }}>{item.title}</Typography>
+                  <Typography variant="body1" color="text.secondary">{item.description}</Typography>
                 </Paper>
               </Fragment>
             ))}
