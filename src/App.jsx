@@ -4,13 +4,14 @@ import * as d3 from 'd3';
 // --- Import dei Componenti UI ---
 import {
   Typography, Box, ToggleButton, ToggleButtonGroup, Container, Slider, Modal, IconButton, Tooltip,
-  Paper, Button, FormGroup, FormControlLabel, Checkbox, CircularProgress, Chip
+  Paper, Button, FormGroup, FormControlLabel, Checkbox, CircularProgress, Chip, Divider
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import InfoIcon from '@mui/icons-material/Info';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 
 // --- Import dei Componenti Grafico ---
 import RadvizChart from './components/RadvizChart';
@@ -21,7 +22,7 @@ import Legend from './components/Legend';
 
 // --- Import dei Servizi e Contenuti Esterni ---
 import infoContent from './data-types-info.json';
-import { loadAndClassifyData } from './services/dataClassifier.js';
+import { loadAndClassifyData, processAndClassifyUploadedData } from './services/dataClassifier.js';
 import { runApiTest } from './services/apiTest.jsx'; 
 
 // --- Stili per i Modali ---
@@ -75,11 +76,10 @@ function App() {
   const [isClassifying, setIsClassifying] = useState(false);
   const [classifiedByAI, setClassifiedByAI] = useState(false);
 
-  // --- NUOVI STATI E REF PER LA GRIGLIA DINAMICA ---
   const gridContainerRef = useRef(null);
   const [gridDimensions, setGridDimensions] = useState({ cols: 1, rows: 1 });
-
   const apiTestRun = useRef(false);
+  const fileInputRef = useRef(null);
 
   // --- Hook per il Test dell'API ---
   useEffect(() => {
@@ -97,10 +97,12 @@ function App() {
       .catch((err) => console.error("Errore nel caricamento di files.json:", err));
   }, []);
   
-  // --- Hook Principale per il Caricamento Dati ---
+  // --- Hook Principale per il Caricamento Dati (solo per file precaricati) ---
   useEffect(() => {
-    if (!selectedFile) {
-      setCsvData([]); setFeatures([]); setDataTypeId(null); setClassifiedByAI(false);
+    if (!selectedFile || !fileList.includes(selectedFile)) {
+      if (selectedFile === '') {
+         setCsvData([]); setFeatures([]); setDataTypeId(null); setClassifiedByAI(false);
+      }
       return;
     }
     const processFile = async () => {
@@ -115,9 +117,9 @@ function App() {
       } finally { setIsClassifying(false); }
     };
     processFile();
-  }, [selectedFile]);
+  }, [selectedFile, fileList]);
 
-  
+  // --- Valori Derivati e Memoizzati ---
   const currentDataTypeInfo = useMemo(() => infoContent.find(item => item.id === dataTypeId), [dataTypeId]);
   const slicedData = useMemo(() => {
     if (!csvData || csvData.length === 0) return [];
@@ -134,7 +136,7 @@ function App() {
     return d3.scaleOrdinal().domain(features).range(d3.schemeTableau10);
   }, [features]);
 
-  // --- CALCOLARE LE DIMENSIONI DELLA GRIGLIA ---
+  // --- Hook per Calcolare le Dimensioni della Griglia ---
   useLayoutEffect(() => {
     const calculateGrid = () => {
       if (!gridContainerRef.current || slicedData.length === 0) return;
@@ -160,14 +162,13 @@ function App() {
 
     calculateGrid(); 
     
-    // Usa ResizeObserver per ricalcolare quando la dimensione del contenitore cambia
     const resizeObserver = new ResizeObserver(calculateGrid);
     if (gridContainerRef.current) {
       resizeObserver.observe(gridContainerRef.current);
     }
 
     return () => resizeObserver.disconnect();
-  }, [slicedData.length]); // Si aggiorna solo quando cambia il numero di elementi
+  }, [slicedData.length]);
 
   // --- Callback per l'Interattività ---
   const handleNodeSelection = useCallback((nodeName) => {
@@ -209,6 +210,38 @@ function App() {
     });
   }, []);
 
+  // --- Callback per l'Upload di File ---
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setSelectedFile(file.name);
+    setIsClassifying(true);
+    setDataTypeId(null);
+    setClassifiedByAI(false);
+    
+    try {
+      const { parsedData, features, dataTypeId, classifiedByAI } = await processAndClassifyUploadedData(file);
+      setCsvData(parsedData);
+      setFeatures(features);
+      setVisibleFeatures(features);
+      setNumberOfRows(parsedData.length);
+      setSelectedNodes([]);
+      setDataTypeId(dataTypeId);
+      setClassifiedByAI(classifiedByAI);
+    } catch (error) {
+      console.error("Errore durante il caricamento del file utente:", error);
+      alert(`Errore nel caricamento: ${error.message}`);
+      setDataTypeId('insufficienti');
+      setCsvData([]);
+      setFeatures([]);
+      setSelectedFile('');
+    } finally {
+      setIsClassifying(false);
+      event.target.value = null;
+    }
+  };
+
   // --- Definizione dei Componenti Grafico ---
   const chartComponents = {
     radviz: <RadvizChart changeType={changeType} data={slicedData} features={visibleFeatures} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={handleNodeSelection}/>,
@@ -217,19 +250,11 @@ function App() {
     pie: (
         <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Legend features={visibleFeatures} colorScale={colorScale} />
-            
             <Box
               ref={gridContainerRef} 
               sx={{
-                display: 'grid',
-                flexGrow: 1,
-                width: '100%',
-                p: 1,
-                gap: 1.5,
-                overflow: 'hidden', 
-                boxSizing: 'border-box',
-                minHeight: 0,
-                
+                display: 'grid', flexGrow: 1, width: '100%', p: 1, gap: 1.5,
+                overflow: 'hidden', boxSizing: 'border-box', minHeight: 0,
                 gridTemplateColumns: `repeat(${gridDimensions.cols}, 1fr)`,
                 gridTemplateRows: `repeat(${gridDimensions.rows}, 1fr)`,
               }}
@@ -240,17 +265,9 @@ function App() {
                   ref={pieChartRefs.current[index]}
                   elevation={2}
                   sx={{
-                    // <-- riempie cella griglia
-                    width: '100%',
-                    height: '100%',
-                    overflow: 'hidden',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minWidth: 0,
-                    minHeight: 0,
-                    boxSizing: 'border-box',
-                    borderRadius: '12px'
+                    width: '100%', height: '100%', overflow: 'hidden', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', minWidth: 0,
+                    minHeight: 0, boxSizing: 'border-box', borderRadius: '12px'
                   }}
                 >
                   <PieChart 
@@ -277,11 +294,52 @@ function App() {
 
         {isMenuOpen && (
           <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', flexGrow: 1 }}>
-            <Box sx={{width: '100%'}}>
-              <Typography variant="subtitle1" gutterBottom sx={{ textAlign: 'center', mb: 1 }}>Seleziona File CSV</Typography>
-              <ToggleButtonGroup value={selectedFile} exclusive onChange={(e, newValue) => { if (newValue !== null) setSelectedFile(newValue); }} aria-label="file selection" orientation="vertical" fullWidth>
-                {fileList.map((fileName) => (<ToggleButton sx={{ textTransform: 'none' }} key={fileName} value={fileName} aria-label={fileName}>{fileName}</ToggleButton>))}
-              </ToggleButtonGroup>
+            
+            <Box sx={{width: '100%', display: 'flex', flexDirection: 'column', gap: 2}}>
+              <Typography variant="subtitle1" gutterBottom sx={{ textAlign: 'center', mb: 0 }}>
+                Seleziona File
+              </Typography>
+              
+              <Button 
+                variant="contained" 
+                startIcon={<UploadFileIcon />}
+                onClick={() => fileInputRef.current.click()}
+              >
+                Carica il tuo CSV
+              </Button>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileUpload}
+                accept=".csv"
+                style={{ display: 'none' }}
+              />
+
+              <Divider>
+                <Typography variant="caption" color="text.secondary">O scegli un esempio</Typography>
+              </Divider>
+              
+              <Paper variant="outlined" sx={{ maxHeight: 200, overflowY: 'auto', width: '100%' }}>
+                <ToggleButtonGroup 
+                  value={selectedFile} 
+                  exclusive 
+                  onChange={(e, newValue) => { if (newValue !== null) setSelectedFile(newValue); }} 
+                  aria-label="file selection" 
+                  orientation="vertical" 
+                  fullWidth
+                >
+                  {fileList.map((fileName) => (
+                    <ToggleButton 
+                      sx={{ textTransform: 'none', justifyContent: 'flex-start', pl: 2 }} 
+                      key={fileName} 
+                      value={fileName} 
+                      aria-label={fileName}
+                    >
+                      {fileName}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
+              </Paper>
             </Box>
 
             {isClassifying ? (
