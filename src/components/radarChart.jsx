@@ -96,17 +96,38 @@ export default function RadarChart({ data, features }) {
       .angle((_, i) => i * angleSlice)
       .curve(d3.curveLinearClosed);
     
-    data.forEach(node => {
-      const total = features.reduce((acc, feature) => acc + (node[feature] || 0), 0);
-      const nodeData = features.map(feature => {
+    // Calcola min e max per ogni feature
+    const minByFeature = {};
+    const maxByFeature = {};
+    features.forEach(feature => {
+      const values = data.map(d => d[feature] || 0);
+      minByFeature[feature] = Math.min(...values);
+      maxByFeature[feature] = Math.max(...values);
+    });
+
+    // Prepara i dati normalizzati (min-max per colonna, poi per riga)
+    const normalizedData = data.map(node => {
+      // Min-max normalization per colonna
+      const minMaxNorm = features.map(feature => {
+        const min = minByFeature[feature];
+        const max = maxByFeature[feature];
+        return max > min ? ((node[feature] || 0) - min) / (max - min) : 0;
+      });
+      // Normalizzazione per riga
+      const sum = minMaxNorm.reduce((acc, v) => acc + v, 0);
+      return features.map((feature, i) => {
         const originalValue = node[feature] || 0;
-        const normalizedValue = total > 0 ? originalValue / total : 0;
+        const value = sum > 0 ? minMaxNorm[i] / sum : 0;
         return {
-          axis: feature, 
-          value: normalizedValue,
-          originalValue: originalValue
+          axis: feature,
+          value,
+          originalValue
         };
       });
+    });
+
+    data.forEach((node, idx) => {
+      const nodeData = normalizedData[idx];
       const nodeColor = colorScale(node.id);
 
       // Disegna solo il contorno, senza riempimento.

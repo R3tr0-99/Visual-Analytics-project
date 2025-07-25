@@ -12,13 +12,38 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
         return;
     }
 
-    const normalizedData = data.map(d => {
-      const total = keys.reduce((acc, key) => acc + (d[key] || 0), 0);
-      const normalizedRow = { name: d.name, id: d.id };
+    // Calcola il minimo e il massimo per ogni colonna (feature)
+    const minByFeature = {};
+    const maxByFeature = {};
+    keys.forEach(key => {
+      const values = data.map(d => d[key] || 0);
+      minByFeature[key] = Math.min(...values);
+      maxByFeature[key] = Math.max(...values);
+    });
+
+    // Normalizza ogni valore rispetto al minimo e massimo della sua colonna (min-max)
+    const minMaxNormalized = data.map(d => {
+      const row = { name: d.name, id: d.id };
       keys.forEach(key => {
-        normalizedRow[key] = total > 0 ? (d[key] || 0) / total : 0;
+        const min = minByFeature[key];
+        const max = maxByFeature[key];
+        if (max > min) {
+          row[key] = ((d[key] || 0) - min) / (max - min);
+        } else {
+          row[key] = 0;
+        }
       });
-      return normalizedRow;
+      return row;
+    });
+
+    // Normalizza per riga: la somma di ogni riga deve essere 1 (100%)
+    const normalizedData = minMaxNormalized.map(row => {
+      const sum = keys.reduce((acc, key) => acc + (row[key] || 0), 0);
+      const normRow = { name: row.name, id: row.id };
+      keys.forEach(key => {
+        normRow[key] = sum > 0 ? (row[key] || 0) / sum : 0;
+      });
+      return normRow;
     });
 
     const { width: fullWidth, height: fullHeight } = containerRef.current.getBoundingClientRect();
