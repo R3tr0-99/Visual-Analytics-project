@@ -6,7 +6,8 @@ export default function PieChart({
   data, 
   title, 
   colorScale: providedColorScale, 
-  margin = { top: 30, right: 0, bottom: 20, left: 0 } // <-- MODIFICA QUI
+  margin = { top: 30, right: 0, bottom: 20, left: 0 }, // <-- MODIFICA QUI
+  showTitle = true
 }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
@@ -62,17 +63,19 @@ export default function PieChart({
         .attr("stroke", "white")
         .style("stroke-width", "2px");
 
-    // Aggiunge il titolo centrato nella parte superiore dell'SVG
-    svg.append("text")
-        .attr("x", fullWidth / 2)
-        .attr("y", margin.top / 2 + 5) 
-        .attr("text-anchor", "middle")
-        .style("font-size", "14px")
-        .style("font-weight", "bold")
-        .style("fill", "#333")
-        .text(title || "Node Distribution");
+    // Aggiunge il titolo centrato nella parte superiore dell'SVG solo se showTitle è true
+    if (showTitle) {
+      svg.append("text")
+          .attr("x", fullWidth / 2)
+          .attr("y", margin.top / 2 + 5) 
+          .attr("text-anchor", "middle")
+          .style("font-size", "14px")
+          .style("font-weight", "bold")
+          .style("fill", "#333")
+          .text(title || "Node Distribution");
+    }
 
-  }, [data, title, providedColorScale, margin]);
+  }, [data, title, providedColorScale, margin, showTitle]);
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>

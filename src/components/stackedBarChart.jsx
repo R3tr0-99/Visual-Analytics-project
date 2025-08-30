@@ -2,7 +2,7 @@
 import React, { useRef, useEffect } from "react";
 import * as d3 from "d3";
 
-export default function StackedBarChart({ data, features, colorScale, margin = { top: 40, right: 30, bottom: 50, left: 50 }, selectedNode, hoveredNode, onBarClick, isNormalized }) {
+export default function StackedBarChart({ data, features, colorScale, margin = { top: 40, right: 30, bottom: 50, left: 50 }, selectedNode, hoveredNode, onBarClick, dataTypeId }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
 
@@ -13,11 +13,33 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
         return;
     }
 
-    const processedData = isNormalized ? data : data.map(d => {
-      const total = keys.reduce((acc, key) => acc + (d[key] || 0), 0);
+    const processedData = data.map(d => {
+      // If data is already in [0,1] domain, use original values for proportions
+      if (dataTypeId === 'dominio_01' || dataTypeId === 'partizionali') {
+        const total = keys.reduce((acc, key) => acc + (d[key] || 0), 0);
+        const normalizedRow = { name: d.name, id: d.id };
+        keys.forEach(key => {
+          normalizedRow[key] = total > 0 ? (d[key] || 0) / total : 0;
+        });
+        return normalizedRow;
+      }
+
+      // For other data types, normalize each attribute to 0-1 scale first
+      const normalizedValues = {};
+      keys.forEach(key => {
+        const values = data.map(item => item[key] || 0);
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const range = max - min;
+        // Normalize to 0-1 scale
+        normalizedValues[key] = range > 0 ? (d[key] - min) / range : 0;
+      });
+      
+      // Then calculate proportions based on normalized values
+      const total = Object.values(normalizedValues).reduce((acc, val) => acc + val, 0);
       const normalizedRow = { name: d.name, id: d.id };
       keys.forEach(key => {
-        normalizedRow[key] = total > 0 ? (d[key] || 0) / total : 0;
+        normalizedRow[key] = total > 0 ? normalizedValues[key] / total : 0;
       });
       return normalizedRow;
     });
@@ -34,9 +56,7 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
     const stackGen = d3.stack().keys(keys);
     const series = stackGen(processedData);
     
-    const yMax = isNormalized 
-      ? d3.max(series, d => d3.max(d, d => d[1])) || 1
-      : 1;
+    const yMax = 1;
     
     const x = d3.scaleBand().domain(data.map(d => d.name)).range([0, width]).padding(0.1);
     const y = d3.scaleLinear().domain([0, yMax]).range([height, 0]);
@@ -87,7 +107,7 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
     totalLegendWidth -= legendPadding;
     if (totalLegendWidth > width) { const scaleFactor = width / totalLegendWidth; legendGroup.attr("font-size", 10 * scaleFactor); let newCurrentX = 0; legendItems.each(function() { const itemWidth = this.getBBox().width; d3.select(this).attr("transform", `translate(${newCurrentX}, 0)`); newCurrentX += itemWidth + legendPadding; }); }
 
-  }, [data, features, selectedNode, hoveredNode, colorScale, margin, onBarClick, isNormalized]);
+  }, [data, features, selectedNode, hoveredNode, colorScale, margin, onBarClick, dataTypeId]);
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>

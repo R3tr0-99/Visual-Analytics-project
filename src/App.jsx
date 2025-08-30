@@ -57,8 +57,8 @@ function App() {
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [isClassifying, setIsClassifying] = useState(false);
   const [classifiedByAI, setClassifiedByAI] = useState(false);
-  const [isNormalized, setIsNormalized] = useState(false);
-
+  const [showPieChartTitles, setShowPieChartTitles] = useState(true);
+  
   const gridContainerRef = useRef(null);
   const [gridDimensions, setGridDimensions] = useState({ cols: 1, rows: 1 });
   const apiTestRun = useRef(false);
@@ -122,9 +122,14 @@ function App() {
   }, [csvData, numberOfRows]);
 
   const displayData = useMemo(() => {
-    if (!isNormalized) return slicedData;
+    // If data is already in [0,1] domain, use original values without normalization
+    if (dataTypeId === 'dominio_01' || dataTypeId === 'partizionali') {
+      return slicedData;
+    }
+
     if (Object.keys(featureRanges).length === 0) return slicedData;
 
+    // Apply range-based normalization for other data types
     return slicedData.map(node => {
       const normalizedNode = { ...node };
       visibleFeatures.forEach(feature => {
@@ -138,7 +143,7 @@ function App() {
       });
       return normalizedNode;
     });
-  }, [slicedData, isNormalized, featureRanges, visibleFeatures]);
+  }, [slicedData, featureRanges, visibleFeatures, dataTypeId]);
 
   useEffect(() => {
     pieChartRefs.current = Array(slicedData.length).fill().map((_, i) => pieChartRefs.current[i] || createRef());
@@ -230,14 +235,14 @@ function App() {
   const chartComponents = {
     radviz: <RadvizChart changeType={changeType} data={displayData} features={visibleFeatures} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={handleNodeSelection}/>,
     radar: <RadarChart data={displayData} features={visibleFeatures} type={type} />,
-    stacked: <StackedBarChart data={displayData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} hoveredNode={hoveredNode} onBarClick={handleBarClick} isNormalized={isNormalized} />,
+    stacked: <StackedBarChart data={displayData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} hoveredNode={hoveredNode} onBarClick={handleBarClick} dataTypeId={dataTypeId} />,
     pie: (
       <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
         <Legend features={visibleFeatures} colorScale={colorScale} />
         <Box ref={gridContainerRef} sx={{ display: 'grid', flexGrow: 1, width: '100%', p: 1, gap: 1.5, overflow: 'hidden', boxSizing: 'border-box', minHeight: 0, gridTemplateColumns: `repeat(${gridDimensions.cols}, 1fr)`, gridTemplateRows: `repeat(${gridDimensions.rows}, 1fr)` }}>
           {displayData.map((node, index) => (
             <Paper key={node.id} ref={pieChartRefs.current[index]} elevation={2} sx={{ width: '100%', height: '100%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, minHeight: 0, boxSizing: 'border-box', borderRadius: '12px' }}>
-              <PieChart title={`${node.name || node.id}`} data={visibleFeatures.map(key => ({ label: key, value: node[key] }))} colorScale={colorScale} margin={{ top: 25, right: 5, bottom: 5, left: 5 }}/>
+              <PieChart title={`${node.name || node.id}`} data={visibleFeatures.map(key => ({ label: key, value: node[key] }))} colorScale={colorScale} margin={{ top: 25, right: 5, bottom: 5, left: 5 }} showTitle={showPieChartTitles}/>
             </Paper>
           ))}
         </Box>
@@ -310,12 +315,12 @@ function App() {
             )}
             {csvData.length > 0 && (
               <Paper variant="outlined" sx={{ width: '90%', p: 1.5 }}>
-                <Typography variant="subtitle1" gutterBottom sx={{ textAlign: 'center', mb: 1 }}>Opzioni Dati</Typography>
+                <Typography variant="subtitle1" gutterBottom sx={{ textAlign: 'center', mb: 1 }}>Opzioni Visualizzazione</Typography>
                 <FormGroup>
-                  <Tooltip title="Normalizza i valori di ogni dimensione nel loro range [0-100%] per renderli comparabili.">
+                  <Tooltip title="Mostra o nascondi i nomi dei grafici a torta">
                     <FormControlLabel 
-                      control={ <Checkbox checked={isNormalized} onChange={(e) => setIsNormalized(e.target.checked)} /> } 
-                      label={<Typography variant="body2">Normalizza Dati (Min-Max)</Typography>}
+                      control={ <Checkbox checked={showPieChartTitles} onChange={(e) => setShowPieChartTitles(e.target.checked)} /> } 
+                      label={<Typography variant="body2">Mostra Nomi Pie Chart</Typography>}
                     />
                   </Tooltip>
                 </FormGroup>
