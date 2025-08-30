@@ -242,7 +242,13 @@ function App() {
         <Box ref={gridContainerRef} sx={{ display: 'grid', flexGrow: 1, width: '100%', p: 1, gap: 1.5, overflow: 'hidden', boxSizing: 'border-box', minHeight: 0, gridTemplateColumns: `repeat(${gridDimensions.cols}, 1fr)`, gridTemplateRows: `repeat(${gridDimensions.rows}, 1fr)` }}>
           {displayData.map((node, index) => (
             <Paper key={node.id} ref={pieChartRefs.current[index]} elevation={2} sx={{ width: '100%', height: '100%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, minHeight: 0, boxSizing: 'border-box', borderRadius: '12px' }}>
-              <PieChart title={`${node.name || node.id}`} data={visibleFeatures.map(key => ({ label: key, value: node[key] }))} colorScale={colorScale} margin={{ top: 25, right: 5, bottom: 5, left: 5 }} showTitle={showPieChartTitles}/>
+              <PieChart 
+                title={`${node.name || node.id}`} 
+                data={visibleFeatures.map(key => ({ label: key, value: node[key] }))} 
+                colorScale={colorScale} 
+                margin={{ top: showPieChartTitles ? 25 : 5, right: 5, bottom: 5, left: 5 }} 
+                showTitle={showPieChartTitles}
+              />
             </Paper>
           ))}
         </Box>
