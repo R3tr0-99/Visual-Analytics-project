@@ -7,7 +7,10 @@ export default function PieChart({
   title, 
   colorScale: providedColorScale, 
   margin = { top: 30, right: 0, bottom: 20, left: 0 }, // <-- MODIFICA QUI
-  showTitle = true
+  showTitle = true,
+  isSelected = false,
+  isHovered = false,
+  showTooltips = true
 }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
@@ -55,13 +58,77 @@ export default function PieChart({
     const pie = d3.pie().value(d => d.value).sort(null);
     const arc = d3.arc().innerRadius(0).outerRadius(radius);
 
-    g.selectAll("path")
+    // Create tooltip only if showTooltips is true
+    let tooltip = null;
+    if (showTooltips) {
+      tooltip = d3.select("body").selectAll(".pie-tooltip")
+        .data([0])
+        .join("div")
+        .attr("class", "pie-tooltip")
+        .style("position", "absolute")
+        .style("background", "rgba(0, 0, 0, 0.8)")
+        .style("color", "white")
+        .style("padding", "8px")
+        .style("border-radius", "4px")
+        .style("font-size", "12px")
+        .style("pointer-events", "none")
+        .style("opacity", 0)
+        .style("z-index", 1000);
+    }
+
+    // Calculate total for percentage calculation
+    const total = dataWithValues.reduce((sum, d) => sum + d.value, 0);
+
+    const paths = g.selectAll("path")
       .data(pie(dataWithValues))
       .join("path")
         .attr("d", arc)
         .attr("fill", d => colorScale(d.data.label))
         .attr("stroke", "white")
         .style("stroke-width", "2px");
+
+    // Add tooltip events only if showTooltips is true
+    if (showTooltips && tooltip) {
+      paths
+        .on("mouseover", function(event, d) {
+          const percentage = ((d.data.value / total) * 100).toFixed(1);
+          const raw = d.data.originalValue !== undefined ? d.data.originalValue : d.data.value;
+          const displayValue = typeof raw === 'number' ? raw.toLocaleString() : raw;
+          tooltip.transition().duration(200).style("opacity", 1);
+          tooltip.html(`${d.data.label}<br/>Value: ${displayValue}<br/>Percentage: ${percentage}%`)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 10) + "px");
+        })
+        .on("mousemove", function(event) {
+          tooltip.style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 10) + "px");
+        })
+        .on("mouseout", function() {
+          tooltip.transition().duration(200).style("opacity", 0);
+        });
+    }
+
+    // Applica stili di evidenziazione se il pie chart è selezionato o in hover
+    if (isSelected || isHovered) {
+      paths.style("opacity", 1)
+           .style("stroke", isSelected ? "black" : (isHovered ? "dimgray" : "white"))
+           .style("stroke-width", isSelected || isHovered ? "3px" : "2px");
+      
+      // Aggiungi un bordo esterno al contenitore
+      svg.append("rect")
+         .attr("x", 2)
+         .attr("y", 2)
+         .attr("width", fullWidth - 4)
+         .attr("height", fullHeight - 4)
+         .attr("fill", "none")
+         .attr("stroke", isSelected ? "black" : "dimgray")
+         .attr("stroke-width", 2)
+         .attr("rx", 10);
+    } else {
+      paths.style("opacity", 1)
+           .style("stroke", "white")
+           .style("stroke-width", "2px");
+    }
 
     // Aggiunge il titolo centrato nella parte superiore dell'SVG solo se showTitle è true
     if (showTitle) {
@@ -75,7 +142,7 @@ export default function PieChart({
           .text(title || "Node Distribution");
     }
 
-  }, [data, title, providedColorScale, margin, showTitle]);
+  }, [data, title, providedColorScale, margin, showTitle, isSelected, isHovered, showTooltips]);
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>

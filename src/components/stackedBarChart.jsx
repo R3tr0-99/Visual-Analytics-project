@@ -1,8 +1,7 @@
-
 import React, { useRef, useEffect } from "react";
 import * as d3 from "d3";
 
-export default function StackedBarChart({ data, features, colorScale, margin = { top: 40, right: 30, bottom: 50, left: 50 }, selectedNode, hoveredNode, onBarClick, dataTypeId }) {
+export default function StackedBarChart({ data, features, colorScale, margin = { top: 40, right: 30, bottom: 50, left: 50 }, selectedNode, hoveredNode, onBarClick, dataTypeId, showTooltips = true }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
 
@@ -62,6 +61,24 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
     const y = d3.scaleLinear().domain([0, yMax]).range([height, 0]);
     const color = colorScale || d3.scaleOrdinal().domain(keys).range(d3.schemeTableau10);
     
+    // Create tooltip only if showTooltips is true
+    let tooltip = null;
+    if (showTooltips) {
+      tooltip = d3.select("body").selectAll(".stacked-tooltip")
+        .data([0])
+        .join("div")
+        .attr("class", "stacked-tooltip")
+        .style("position", "absolute")
+        .style("background", "rgba(0, 0, 0, 0.8)")
+        .style("color", "white")
+        .style("padding", "8px")
+        .style("border-radius", "4px")
+        .style("font-size", "12px")
+        .style("pointer-events", "none")
+        .style("opacity", 0)
+        .style("z-index", 1000);
+    }
+    
     const barGroups = g.append("g").selectAll("g").data(series).join("g")
         .attr("fill", d => color(d.key))
       .selectAll("rect").data(d => d).join("rect")
@@ -69,6 +86,27 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
         .attr("y", d => y(d[1]))
         .attr("height", d => Math.max(0, y(d[0]) - y(d[1])))
         .attr("width", x.bandwidth());
+
+    // Add tooltip events only if showTooltips is true
+    if (showTooltips && tooltip) {
+      barGroups
+        .on("mouseover", function(event, d) {
+          const segmentValue = d[1] - d[0];
+          const percentage = (segmentValue * 100).toFixed(1);
+          const feature = d3.select(this.parentNode).datum().key;
+          tooltip.transition().duration(200).style("opacity", 1);
+          tooltip.html(`${d.data.name}<br/>Feature: ${feature}<br/>Value: ${segmentValue.toFixed(3)}<br/>Percentage: ${percentage}%`)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 10) + "px");
+        })
+        .on("mousemove", function(event) {
+          tooltip.style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 10) + "px");
+        })
+        .on("mouseout", function() {
+          tooltip.transition().duration(200).style("opacity", 0);
+        });
+    }
 
     g.append("g").selectAll("g").data(data).join("rect")
         .attr("class", "click-target")
@@ -107,7 +145,7 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
     totalLegendWidth -= legendPadding;
     if (totalLegendWidth > width) { const scaleFactor = width / totalLegendWidth; legendGroup.attr("font-size", 10 * scaleFactor); let newCurrentX = 0; legendItems.each(function() { const itemWidth = this.getBBox().width; d3.select(this).attr("transform", `translate(${newCurrentX}, 0)`); newCurrentX += itemWidth + legendPadding; }); }
 
-  }, [data, features, selectedNode, hoveredNode, colorScale, margin, onBarClick, dataTypeId]);
+  }, [data, features, selectedNode, hoveredNode, colorScale, margin, onBarClick, dataTypeId, showTooltips]);
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>

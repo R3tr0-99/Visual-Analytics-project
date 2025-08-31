@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo, useState, createRef, useRef, Fragment, useLayoutEffect } from 'react';
 import * as d3 from 'd3';
 
@@ -58,6 +57,7 @@ function App() {
   const [isClassifying, setIsClassifying] = useState(false);
   const [classifiedByAI, setClassifiedByAI] = useState(false);
   const [showPieChartTitles, setShowPieChartTitles] = useState(true);
+  const [showTooltips, setShowTooltips] = useState(true);
   
   const gridContainerRef = useRef(null);
   const [gridDimensions, setGridDimensions] = useState({ cols: 1, rows: 1 });
@@ -235,22 +235,34 @@ function App() {
   const chartComponents = {
     radviz: <RadvizChart changeType={changeType} data={displayData} features={visibleFeatures} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={handleNodeSelection}/>,
     radar: <RadarChart data={displayData} features={visibleFeatures} type={type} />,
-    stacked: <StackedBarChart data={displayData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} hoveredNode={hoveredNode} onBarClick={handleBarClick} dataTypeId={dataTypeId} />,
+    stacked: <StackedBarChart data={displayData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} hoveredNode={hoveredNode} onBarClick={handleBarClick} dataTypeId={dataTypeId} showTooltips={showTooltips} />,
     pie: (
       <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
         <Legend features={visibleFeatures} colorScale={colorScale} />
         <Box ref={gridContainerRef} sx={{ display: 'grid', flexGrow: 1, width: '100%', p: 1, gap: 1.5, overflow: 'hidden', boxSizing: 'border-box', minHeight: 0, gridTemplateColumns: `repeat(${gridDimensions.cols}, 1fr)`, gridTemplateRows: `repeat(${gridDimensions.rows}, 1fr)` }}>
-          {displayData.map((node, index) => (
-            <Paper key={node.id} ref={pieChartRefs.current[index]} elevation={2} sx={{ width: '100%', height: '100%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, minHeight: 0, boxSizing: 'border-box', borderRadius: '12px' }}>
-              <PieChart 
-                title={`${node.name || node.id}`} 
-                data={visibleFeatures.map(key => ({ label: key, value: node[key] }))} 
-                colorScale={colorScale} 
-                margin={{ top: showPieChartTitles ? 25 : 5, right: 5, bottom: 5, left: 5 }} 
-                showTitle={showPieChartTitles}
-              />
-            </Paper>
-          ))}
+          {displayData.map((node, index) => {
+            const isSelected = selectedNodes.length > 0 && selectedNodes[0].name === node.name;
+            const isHovered = hoveredNode && hoveredNode.name === node.name;
+            
+            return (
+              <Paper key={node.id} ref={pieChartRefs.current[index]} elevation={2} sx={{ width: '100%', height: '100%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, minHeight: 0, boxSizing: 'border-box', borderRadius: '12px' }}>
+                <PieChart 
+                  title={`${node.name || node.id}`} 
+                  data={visibleFeatures.map(key => ({ 
+                    label: key, 
+                    value: node[key],
+                    originalValue: slicedData.find(original => original.name === node.name)?.[key] || node[key]
+                  }))} 
+                  colorScale={colorScale} 
+                  margin={{ top: showPieChartTitles ? 25 : 5, right: 5, bottom: 5, left: 5 }} 
+                  showTitle={showPieChartTitles}
+                  isSelected={isSelected}
+                  isHovered={isHovered}
+                  showTooltips={showTooltips}
+                />
+              </Paper>
+            );
+          })}
         </Box>
       </Box>
     )
@@ -329,6 +341,12 @@ function App() {
                       label={<Typography variant="body2">Mostra Nomi Pie Chart</Typography>}
                     />
                   </Tooltip>
+                  <Tooltip title="Mostra o nascondi i tooltip con percentuali al passaggio del mouse">
+                    <FormControlLabel 
+                      control={ <Checkbox checked={showTooltips} onChange={(e) => setShowTooltips(e.target.checked)} /> } 
+                      label={<Typography variant="body2">Mostra Tooltip Percentuali</Typography>}
+                    />
+                  </Tooltip>
                 </FormGroup>
               </Paper>
             )}
@@ -390,4 +408,3 @@ function App() {
 }
 
 export default App;
-
