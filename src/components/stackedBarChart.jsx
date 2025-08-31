@@ -12,6 +12,8 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
         return;
     }
 
+    const originalDataByName = new Map(data.map(d => [d.name, d]));
+
     const processedData = data.map(d => {
       // If data is already in [0,1] domain, use original values for proportions
       if (dataTypeId === 'dominio_01' || dataTypeId === 'partizionali') {
@@ -87,6 +89,13 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
         .attr("height", d => Math.max(0, y(d[0]) - y(d[1])))
         .attr("width", x.bandwidth());
 
+    // Make segments clickable and cursor pointer (replaces overlay click-target)
+    barGroups
+      .style("cursor", "pointer")
+      .on("click", (event, d) => {
+        if (onBarClick) onBarClick(d.data.name);
+      });
+
     // Add tooltip events only if showTooltips is true
     if (showTooltips && tooltip) {
       barGroups
@@ -94,8 +103,10 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
           const segmentValue = d[1] - d[0];
           const percentage = (segmentValue * 100).toFixed(1);
           const feature = d3.select(this.parentNode).datum().key;
+          const raw = originalDataByName.get(d.data.name)?.[feature];
+          const displayValue = (typeof raw === 'number' && isFinite(raw)) ? raw.toLocaleString() : segmentValue.toFixed(3);
           tooltip.transition().duration(200).style("opacity", 1);
-          tooltip.html(`${d.data.name}<br/>Feature: ${feature}<br/>Value: ${segmentValue.toFixed(3)}<br/>Percentage: ${percentage}%`)
+          tooltip.html(`${d.data.name}<br/>Feature: ${feature}<br/>Value: ${displayValue}<br/>Percentage: ${percentage}%`)
             .style("left", (event.pageX + 10) + "px")
             .style("top", (event.pageY - 10) + "px");
         })
@@ -108,18 +119,7 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
         });
     }
 
-    g.append("g").selectAll("g").data(data).join("rect")
-        .attr("class", "click-target")
-        .attr("x", d => x(d.name))
-        .attr("y", 0)
-        .attr("width", x.bandwidth())
-        .attr("height", height)
-        .style("fill", "transparent")
-        .style("cursor", "pointer")
-        .on("click", (event, d) => {
-          if (onBarClick) onBarClick(d.name);
-        });
-
+    
     const selectedBarName = selectedNode?.attributes?.name || selectedNode?.name;
     const hoveredBarName = hoveredNode?.attributes?.name || hoveredNode?.name;
 
