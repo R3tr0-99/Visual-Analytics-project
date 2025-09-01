@@ -45,6 +45,7 @@ function App() {
   const [csvData, setCsvData] = useState([]);
   const [features, setFeatures] = useState([]);
   const [visibleFeatures, setVisibleFeatures] = useState([]);
+  const [anchorOrder, setAnchorOrder] = useState([]); // MODIFICA: Stato per l'ordine delle ancore
   const [selectedNodes, setSelectedNodes] = useState([]);
   const [hoveredNode, setHoveredNode] = useState(null);
   const [type, setType] = useState("original");
@@ -99,6 +100,15 @@ function App() {
     processFile();
   }, [selectedFile, fileList]);
 
+  // MODIFICA: Gestisce correttamente l'aggiornamento dell'ordine
+  useEffect(() => {
+    setAnchorOrder(currentOrder => {
+      const newFilteredOrder = currentOrder.filter(anchor => visibleFeatures.includes(anchor));
+      const addedAnchors = visibleFeatures.filter(anchor => !newFilteredOrder.includes(anchor));
+      return [...newFilteredOrder, ...addedAnchors];
+    });
+  }, [visibleFeatures]);
+  
   const currentDataTypeInfo = useMemo(() => infoContent.find(item => item.id === dataTypeId), [dataTypeId]);
 
   const featureRanges = useMemo(() => {
@@ -122,14 +132,10 @@ function App() {
   }, [csvData, numberOfRows]);
 
   const displayData = useMemo(() => {
-    // If data is already in [0,1] domain, use original values without normalization
     if (dataTypeId === 'dominio_01' || dataTypeId === 'partizionali') {
       return slicedData;
     }
-
     if (Object.keys(featureRanges).length === 0) return slicedData;
-
-    // Apply range-based normalization for other data types
     return slicedData.map(node => {
       const normalizedNode = { ...node };
       visibleFeatures.forEach(feature => {
@@ -202,6 +208,12 @@ function App() {
   const handleZoom = (chartKey) => setZoomedChart(current => (current === chartKey ? null : chartKey));
   const hoveredNodeChanged = useCallback((node) => setHoveredNode(node), []);
   const changeType = useCallback((typeTmp) => setType(typeTmp), []);
+  
+  // MODIFICA: Callback per ricevere il nuovo ordine da RadvizChart
+  const handleAnchorOrderChange = useCallback((newOrder) => {
+      setAnchorOrder(newOrder);
+  }, []);
+
   const handleRandomSelection = useCallback(() => {
     if (csvData.length > 0) setNumberOfRows(Math.floor(Math.random() * csvData.length) + 1);
   }, [csvData.length]);
@@ -233,8 +245,10 @@ function App() {
   };
 
   const chartComponents = {
-    radviz: <RadvizChart changeType={changeType} data={displayData} features={visibleFeatures} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={handleNodeSelection}/>,
-    radar: <RadarChart data={displayData} features={visibleFeatures} type={type} />,
+    // MODIFICA: Passa la nuova prop e la callback a RadvizChart
+    radviz: <RadvizChart changeType={changeType} data={displayData} features={visibleFeatures} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={handleNodeSelection} onOrderChange={handleAnchorOrderChange}/>,
+    // MODIFICA: Passa a RadarChart il nuovo `anchorOrder`
+    radar: <RadarChart data={displayData} features={anchorOrder} type={type} />,
     stacked: <StackedBarChart data={displayData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} hoveredNode={hoveredNode} onBarClick={handleBarClick} dataTypeId={dataTypeId} showTooltips={showTooltips} />,
     pie: (
       <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -243,7 +257,6 @@ function App() {
           {displayData.map((node, index) => {
             const isSelected = selectedNodes.length > 0 && selectedNodes[0].name === node.name;
             const isHovered = hoveredNode && hoveredNode.name === node.name;
-            
             return (
               <Paper key={node.id} ref={pieChartRefs.current[index]} elevation={2} sx={{ width: '100%', height: '100%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0, minHeight: 0, boxSizing: 'border-box', borderRadius: '12px' }}>
                 <PieChart 

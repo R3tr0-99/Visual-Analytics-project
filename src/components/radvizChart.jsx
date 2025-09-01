@@ -15,15 +15,15 @@ export default function RadvizChart(props) {
     
     const selectedNodeElement = useRef(null);
 
-    // --- MODIFICA CHIAVE 1: Usa le ref per stabilizzare le callback ---
-    // Questo previene ri-render inutili quando le funzioni cambiano in App.jsx
+    // Usa le ref per stabilizzare TUTTE le callback
     const nodeSelectedChangedRef = useRef(props.nodeSelectedChanged);
     const hoveredNodeChangedRef = useRef(props.hoveredNodeChanged);
+    const onOrderChangeRef = useRef(props.onOrderChange);
     useEffect(() => {
         nodeSelectedChangedRef.current = props.nodeSelectedChanged;
         hoveredNodeChangedRef.current = props.hoveredNodeChanged;
+        onOrderChangeRef.current = props.onOrderChange;
     });
-    // --- FINE MODIFICA 1 ---
 
     useEffect(() => {
         if (!containerRef.current) return;
@@ -74,7 +74,6 @@ export default function RadvizChart(props) {
                     
                     selectedNodeElement.current = null;
                     setNodeHovered(null);
-                    // --- MODIFICA CHIAVE 2: Usa la ref ---
                     nodeSelectedChangedRef.current(null);
                     return;
                 }
@@ -91,17 +90,11 @@ export default function RadvizChart(props) {
                 
                 selectedNodeElement.current = clickedEl;
                 setNodeHovered(data);
-                // --- MODIFICA CHIAVE 2: Usa la ref ---
                 nodeSelectedChangedRef.current(data.name); 
             });
 
-            // Aggiungiamo i listener per l'hover del mouse per il tooltip
-            chartRef.current.setFunctionMouseOver((_, data) => {
-                setTrulyHoveredNode(data);
-            });
-            chartRef.current.setFunctionMouseOut(() => {
-                setTrulyHoveredNode(null);
-            });
+            chartRef.current.setFunctionMouseOver((_, data) => { setTrulyHoveredNode(data); });
+            chartRef.current.setFunctionMouseOut(() => { setTrulyHoveredNode(null); });
         }
         
         chartRef.current.data(radvizData);
@@ -115,18 +108,24 @@ export default function RadvizChart(props) {
             if (!el.attr("r-default")) el.attr("r-default", r);
         });
         
-        // La logica di animazione viene eseguita qui, triggerata solo dal cambio di 'type' o 'radvizData'
         if (type === "eemh") {
-            const updated = minEffectivenessErrorHeuristic(chartRef.current.data());
-            chartRef.current.updateRadviz(updated);
+            const updatedOrderIndices = minEffectivenessErrorHeuristic(chartRef.current.data());
+            chartRef.current.updateRadviz(updatedOrderIndices);
+            
+            // --- MODIFICA CHIAVE RISOLUTIVA ---
+            // "Traduci" l'array di indici in un array di nomi di feature
+            // prima di inviarlo al componente padre.
+            const newAnchorOrderByName = updatedOrderIndices.map(index => props.features[index]);
+            onOrderChangeRef.current(newAnchorOrderByName);
+
         } else if (type === "original") {
             chartRef.current.updateRadviz();
+            // Comunica l'ordine originale (che è già un array di nomi)
+            onOrderChangeRef.current(props.features);
         }
 
-    // --- MODIFICA CHIAVE 3: Rimuovi le callback dalle dipendenze ---
     }, [radvizData, props.features, containerDims, type]); 
 
-    // Questo effect è corretto: si attiva solo quando arrivano nuovi dati.
     useEffect(() => {
         resetState();
         if(props.data && props.data.length > 0) {
@@ -136,7 +135,6 @@ export default function RadvizChart(props) {
         }
     }, [props.data]);
 
-    // Questo effect ora usa la ref, quindi non causa problemi
     useEffect(() => { 
         hoveredNodeChangedRef.current(nodeHovered); 
     }, [nodeHovered]);
@@ -159,12 +157,15 @@ export default function RadvizChart(props) {
 
     const resetState = () => {
         setType("original");
-        // --- MODIFICA CHIAVE 2: Usa la ref ---
         nodeSelectedChangedRef.current(null); 
         setNodeHovered(null);
         setValoreRaggio(0);
         if (chartRef.current) {
             chartRef.current.setRadiusPoints(1);
+        }
+        // Assicurati che anche il reset comunichi l'ordine originale
+        if (props.features && onOrderChangeRef.current) {
+            onOrderChangeRef.current(props.features);
         }
     }
     
