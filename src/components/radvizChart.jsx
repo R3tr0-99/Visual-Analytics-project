@@ -1,6 +1,7 @@
-import { Box, Button, Typography, Paper } from "@mui/material"; // Aggiunto Paper e Typography per il tooltip
+
+import { Box, Button, Typography, Paper } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { minEffectivenessErrorHeuristic } from "../utils/arrangement"; 
+import { minEffectivenessErrorHeuristic } from "../utils/arrangement";
 
 export default function RadvizChart(props) {
     const containerRef = useRef(null);
@@ -9,13 +10,15 @@ export default function RadvizChart(props) {
     const [containerDims, setContainerDims] = useState({ width: 0, height: 0 });
 
     const [nodeHovered, setNodeHovered] = useState(null);
-    const [trulyHoveredNode, setTrulyHoveredNode] = useState(null); // Per il vero hover del mouse
+    const [trulyHoveredNode, setTrulyHoveredNode] = useState(null);
     const [valoreRaggio, setValoreRaggio] = useState(0);
     const [type, setType] = useState("original");
-    
-    const selectedNodeElement = useRef(null);
 
-    // Usa le ref per stabilizzare TUTTE le callback
+    const selectedNodeElement = useRef(null);
+    
+    
+    const prevTypeRef = useRef(type);
+
     const nodeSelectedChangedRef = useRef(props.nodeSelectedChanged);
     const hoveredNodeChangedRef = useRef(props.hoveredNodeChanged);
     const onOrderChangeRef = useRef(props.onOrderChange);
@@ -27,17 +30,18 @@ export default function RadvizChart(props) {
 
     useEffect(() => {
         if (!containerRef.current) return;
-        d3.select(containerRef.current).selectAll('*').remove();
-        svgRef.current = d3.select(containerRef.current).append('svg');
+        const svgElement = d3.select(containerRef.current);
+        svgElement.selectAll('*').remove();
+        svgRef.current = svgElement.append('svg');
 
         const resizeObserver = new ResizeObserver(entries => {
             if (!entries || !entries.length) return;
             const { width, height } = entries[0].contentRect;
             setContainerDims({ width, height });
         });
-        
+
         resizeObserver.observe(containerRef.current);
-        
+
         return () => resizeObserver.disconnect();
     }, []);
 
@@ -52,6 +56,7 @@ export default function RadvizChart(props) {
         });
     }, [props.data, props.features]);
 
+    // --- MODIFICA CHIAVE 2: Ritorniamo a un singolo, potente useEffect ---
     useEffect(() => {
         if (radvizData.length === 0 || props.features.length < 2 || !svgRef.current || containerDims.width === 0) {
             if (svgRef.current) svgRef.current.selectAll('*').remove();
@@ -63,15 +68,14 @@ export default function RadvizChart(props) {
 
         if (!chartRef.current) {
             chartRef.current = d3.radviz();
-
-            chartRef.current.setFunctionClick((_, event) => {
+            // ... setup delle funzioni di interazione ...
+             chartRef.current.setFunctionClick((_, event) => {
                 const clickedEl = d3.select(event.target);
                 const data = event.target.__data__;
                 
                 if (selectedNodeElement.current && selectedNodeElement.current.node() === clickedEl.node()) {
                     const rPrev = +clickedEl.attr('r-prev') || +clickedEl.attr('r-default') || 1;
                     clickedEl.classed('selected', false).attr('r', rPrev).attr('stroke', 'black').attr('stroke-width', 0.2).attr('r-prev', null);
-                    
                     selectedNodeElement.current = null;
                     setNodeHovered(null);
                     nodeSelectedChangedRef.current(null);
@@ -92,55 +96,57 @@ export default function RadvizChart(props) {
                 setNodeHovered(data);
                 nodeSelectedChangedRef.current(data.name); 
             });
-
             chartRef.current.setFunctionMouseOver((_, data) => { setTrulyHoveredNode(data); });
             chartRef.current.setFunctionMouseOut(() => { setTrulyHoveredNode(null); });
         }
         
+        // 1. Disegna SEMPRE lo stato base (gestisce il resize)
         chartRef.current.data(radvizData);
         svgRef.current.attr('width', size).attr('height', size).style('margin', 'auto');
         svgRef.current.selectAll('*').remove();
         svgRef.current.call(chartRef.current);
-        
         d3.selectAll("circle.data_point").each(function () {
             const el = d3.select(this);
             const r = parseFloat(el.attr("r")) || 1;
             if (!el.attr("r-default")) el.attr("r-default", r);
         });
-        
-        if (type === "eemh") {
-            const updatedOrderIndices = minEffectivenessErrorHeuristic(chartRef.current.data());
-            chartRef.current.updateRadviz(updatedOrderIndices);
-            
-            // --- MODIFICA CHIAVE RISOLUTIVA ---
-            // "Traduci" l'array di indici in un array di nomi di feature
-            // prima di inviarlo al componente padre.
-            const newAnchorOrderByName = updatedOrderIndices.map(index => props.features[index]);
-            onOrderChangeRef.current(newAnchorOrderByName);
 
-        } else if (type === "original") {
-            chartRef.current.updateRadviz();
-            // Comunica l'ordine originale (che è già un array di nomi)
-            onOrderChangeRef.current(props.features);
+        // 2. Controlla se dobbiamo ANIMARE
+        const typeChanged = prevTypeRef.current !== type;
+        if (typeChanged) {
+            if (type === "eemh") {
+                const updatedOrderIndices = minEffectivenessErrorHeuristic(chartRef.current.data());
+                chartRef.current.updateRadviz(updatedOrderIndices);
+                const newAnchorOrderByName = updatedOrderIndices.map(index => props.features[index]);
+                onOrderChangeRef.current(newAnchorOrderByName);
+            } else if (type === "original") {
+                chartRef.current.updateRadviz();
+                onOrderChangeRef.current(props.features);
+            }
         }
 
-    }, [radvizData, props.features, containerDims, type]); 
+        // 3. Aggiorna la ref per il prossimo render
+        prevTypeRef.current = type;
 
+    }, [radvizData, containerDims, type, props.features]); // La dependency array è di nuovo completa
+
+    // Questo useEffect imposta il 'type' quando i dati cambiano, il che
+    // attiverà l'effetto principale per eseguire l'animazione.
     useEffect(() => {
-        resetState();
-        if(props.data && props.data.length > 0) {
+        if (props.data && props.data.length > 0) {
             setType('eemh');
         } else {
+            // Se i dati vengono rimossi, torna allo stato originale.
             setType('original');
         }
     }, [props.data]);
 
-    useEffect(() => { 
-        hoveredNodeChangedRef.current(nodeHovered); 
+    useEffect(() => {
+        hoveredNodeChangedRef.current(nodeHovered);
     }, [nodeHovered]);
-    
-    useEffect(() => { props.changeType(type); }, [type, props.changeType]);
-    
+
+    useEffect(() => { props.changeType(type); }, [type]);
+
     const increaseRaggio = () => {
         if (chartRef.current && valoreRaggio < 5) {
             chartRef.current.increaseRadius();
@@ -154,32 +160,28 @@ export default function RadvizChart(props) {
             setValoreRaggio(v => v - 1);
         }
     }
-
+    
     const resetState = () => {
         setType("original");
-        nodeSelectedChangedRef.current(null); 
+        nodeSelectedChangedRef.current(null);
         setNodeHovered(null);
         setValoreRaggio(0);
         if (chartRef.current) {
             chartRef.current.setRadiusPoints(1);
         }
-        // Assicurati che anche il reset comunichi l'ordine originale
-        if (props.features && onOrderChangeRef.current) {
-            onOrderChangeRef.current(props.features);
-        }
     }
-    
+
     return (
         <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-             {trulyHoveredNode && (
-                <Paper 
-                    elevation={4} 
+            {trulyHoveredNode && (
+                <Paper
+                    elevation={4}
                     sx={{
                         position: 'absolute', top: 10, left: 10, zIndex: 10,
                         pointerEvents: 'none', backgroundColor: '#ffffe0', p: 1.5,
                         borderRadius: '8px', display: 'flex', flexDirection: 'column',
                         alignItems: 'center', textAlign: 'center',
-                     }}
+                    }}
                 >
                     <Typography variant="h5" component="div">{trulyHoveredNode.name}</Typography>
                     <Typography variant="body2" color="text.secondary">
@@ -187,17 +189,12 @@ export default function RadvizChart(props) {
                     </Typography>
                 </Paper>
             )}
-
-            <Box
-                ref={containerRef}
-                sx={{ width: '100%', flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-            />
-            
+            <Box ref={containerRef} sx={{ width: '100%', flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }} />
             <Box sx={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: 'center', pt: 1, flexShrink: 0 }}>
-                 <Button disabled={valoreRaggio >= 5} variant="outlined" onClick={increaseRaggio}>Raggio +</Button>
-                 <Button disabled={valoreRaggio <= -5} variant="outlined" onClick={decreaseRaggio}>Raggio -</Button>
-                 <Button disabled={type === "eemh"} variant="outlined" onClick={() => setType("eemh")}>EEMH Heuristic</Button>
-                 <Button variant="outlined" onClick={resetState}>Reset</Button>
+                <Button disabled={valoreRaggio >= 5} variant="outlined" onClick={increaseRaggio}>Raggio +</Button>
+                <Button disabled={valoreRaggio <= -5} variant="outlined" onClick={decreaseRaggio}>Raggio -</Button>
+                <Button disabled={type === "eemh"} variant="outlined" onClick={() => setType("eemh")}>EEMH Heuristic</Button>
+                <Button variant="outlined" onClick={resetState}>Reset</Button>
             </Box>
         </Box>
     );
