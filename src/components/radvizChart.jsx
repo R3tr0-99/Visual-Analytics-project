@@ -1,4 +1,3 @@
-
 import { Box, Button, Typography, Paper } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { minEffectivenessErrorHeuristic } from "../utils/arrangement";
@@ -16,8 +15,8 @@ export default function RadvizChart(props) {
 
     const selectedNodeElement = useRef(null);
     
-    
-    const prevTypeRef = useRef(type);
+    // --- MODIFICA 1: Usiamo un Ref per tracciare se un'animazione è in corso ---
+    const isAnimating = useRef(false);
 
     const nodeSelectedChangedRef = useRef(props.nodeSelectedChanged);
     const hoveredNodeChangedRef = useRef(props.hoveredNodeChanged);
@@ -56,7 +55,7 @@ export default function RadvizChart(props) {
         });
     }, [props.data, props.features]);
 
-    // --- MODIFICA CHIAVE 2: Ritorniamo a un singolo, potente useEffect ---
+    // --- MODIFICA 2: useEffect per il DISEGNO e RESIZE (senza animazione) ---
     useEffect(() => {
         if (radvizData.length === 0 || props.features.length < 2 || !svgRef.current || containerDims.width === 0) {
             if (svgRef.current) svgRef.current.selectAll('*').remove();
@@ -68,7 +67,7 @@ export default function RadvizChart(props) {
 
         if (!chartRef.current) {
             chartRef.current = d3.radviz();
-            // ... setup delle funzioni di interazione ...
+            // Setup delle funzioni di interazione (una sola volta)
              chartRef.current.setFunctionClick((_, event) => {
                 const clickedEl = d3.select(event.target);
                 const data = event.target.__data__;
@@ -100,7 +99,7 @@ export default function RadvizChart(props) {
             chartRef.current.setFunctionMouseOut(() => { setTrulyHoveredNode(null); });
         }
         
-        // 1. Disegna SEMPRE lo stato base (gestisce il resize)
+        // 1. Disegna sempre lo stato base
         chartRef.current.data(radvizData);
         svgRef.current.attr('width', size).attr('height', size).style('margin', 'auto');
         svgRef.current.selectAll('*').remove();
@@ -111,32 +110,45 @@ export default function RadvizChart(props) {
             if (!el.attr("r-default")) el.attr("r-default", r);
         });
 
-        // 2. Controlla se dobbiamo ANIMARE
-        const typeChanged = prevTypeRef.current !== type;
-        if (typeChanged) {
-            if (type === "eemh") {
-                const updatedOrderIndices = minEffectivenessErrorHeuristic(chartRef.current.data());
-                chartRef.current.updateRadviz(updatedOrderIndices);
-                const newAnchorOrderByName = updatedOrderIndices.map(index => props.features[index]);
-                onOrderChangeRef.current(newAnchorOrderByName);
-            } else if (type === "original") {
-                chartRef.current.updateRadviz();
-                onOrderChangeRef.current(props.features);
-            }
+        // 2. Se non c'è un'animazione in corso (cioè è un resize), ripristina lo stato EEMH istantaneamente.
+        if (type === 'eemh' && !isAnimating.current) {
+            const updatedOrderIndices = minEffectivenessErrorHeuristic(chartRef.current.data());
+            // Il trucco è chiamare updateRadviz con un timeout di 0.
+            // Questo forza D3 a eseguire l'aggiornamento nel prossimo "tick", ma senza la transizione visibile.
+            setTimeout(() => {
+                if(chartRef.current) chartRef.current.updateRadviz(updatedOrderIndices);
+            }, 0);
         }
 
-        // 3. Aggiorna la ref per il prossimo render
-        prevTypeRef.current = type;
+    }, [radvizData, containerDims, props.features]); // Questo useEffect NON dipende più da `type`
 
-    }, [radvizData, containerDims, type, props.features]); // La dependency array è di nuovo completa
+    // --- MODIFICA 3: useEffect per l'ANIMAZIONE (solo quando `type` cambia) ---
+    useEffect(() => {
+        // Se non c'è il grafico o i dati, non fare nulla.
+        if (!chartRef.current || radvizData.length === 0) return;
 
-    // Questo useEffect imposta il 'type' quando i dati cambiano, il che
-    // attiverà l'effetto principale per eseguire l'animazione.
+        isAnimating.current = true;
+
+        if (type === "eemh") {
+            const updatedOrderIndices = minEffectivenessErrorHeuristic(chartRef.current.data());
+            chartRef.current.updateRadviz(updatedOrderIndices);
+            const newAnchorOrderByName = updatedOrderIndices.map(index => props.features[index]);
+            onOrderChangeRef.current(newAnchorOrderByName);
+        } else if (type === "original") {
+            chartRef.current.updateRadviz();
+            onOrderChangeRef.current(props.features);
+        }
+
+        // L'animazione di D3 dura circa 750ms. Diamo un po' di margine.
+        setTimeout(() => { isAnimating.current = false; }, 1000);
+
+    }, [type]); // Questo useEffect dipende SOLO da `type`
+
+
     useEffect(() => {
         if (props.data && props.data.length > 0) {
             setType('eemh');
         } else {
-            // Se i dati vengono rimossi, torna allo stato originale.
             setType('original');
         }
     }, [props.data]);
