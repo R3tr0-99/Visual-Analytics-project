@@ -33,28 +33,28 @@ export default function RadarChart({ data, features }) {
 
   useEffect(() => {
     const { width, height } = dimensions;
-    if (!svgRef.current || features.length < 2 || !data || data.length === 0 || width === 0 || height === 0) {
+    const margin = 50;
+    
+    // --- SOLUZIONE 1: Gestiamo il caso in cui il contenitore sia troppo piccolo ---
+    // Se la larghezza o l'altezza sono insufficienti per disegnare il grafico con i suoi margini,
+    // puliamo l'SVG e interrompiamo l'esecuzione per evitare calcoli con valori negativi.
+    if (!svgRef.current || features.length < 2 || !data || data.length === 0 || width < margin * 2 || height < margin * 2) {
         d3.select(svgRef.current).selectAll("*").remove();
         return;
     }
 
     const size = Math.min(width, height);
-    const margin = 50;
     const radius = (size / 2) - margin;
     const levels = 5;
     
-    // --- MODIFICA ANIMAZIONE 1: Definiamo la durata della transizione ---
-    const transitionDuration = 750; // in millisecondi
+    const transitionDuration = 750;
 
     const svg = d3.select(svgRef.current).attr("width", size).attr("height", size);
 
-    // --- MODIFICA ANIMAZIONE 2: Non cancelliamo tutto! Selezioniamo o creiamo il gruppo 'g' ---
-    // Questo è fondamentale. Il gruppo 'g' ora persiste tra i render.
     const g = svg.selectAll("g.radar-chart-group").data([null]);
     const gEnter = g.enter().append("g").attr("class", "radar-chart-group");
     const gUpdate = g.merge(gEnter).attr("transform", `translate(${size / 2},${size / 2})`);
 
-    // Il tooltip viene ancora gestito allo stesso modo
     const tooltip = d3.select(containerRef.current).selectAll(".radarchart-tooltip").data([null])
       .join("div")
       .attr("style", Object.entries(tooltipStyle).map(([k, v]) => `${k.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}:${v}`).join(';'))
@@ -64,7 +64,6 @@ export default function RadarChart({ data, features }) {
     const colorScale = d3.scaleOrdinal(d3.schemeTableau10).domain(data.map(d => d.id));
     const angleSlice = (Math.PI * 2) / features.length;
 
-    // --- GRIGLIA E ETICHETTE LIVELLI (queste non necessitano di animazione complessa) ---
     const gridWrapper = gUpdate.selectAll(".grid-wrapper").data([null]).join("g").attr("class", "grid-wrapper");
     gridWrapper.selectAll(".levels").data(d3.range(1, levels + 1).reverse())
       .join("circle").attr("class", "levels")
@@ -77,22 +76,18 @@ export default function RadarChart({ data, features }) {
       .attr("dy", "0.4em").style("font-size", "10px").attr("fill", "#737373")
       .text(d => `${(100 * d / levels).toFixed(0)}%`);
 
-    // --- MODIFICA ANIMAZIONE 3: Applichiamo il General Update Pattern agli ASSI ---
     const axis = gridWrapper.selectAll(".axis")
-      .data(features, d => d); // La chiave (d => d) è FONDAMENTALE per tracciare gli assi per nome
+      .data(features, d => d);
 
-    // EXIT: Rimuovi gli assi che non ci sono più
     axis.exit()
       .transition().duration(transitionDuration)
       .style("opacity", 0)
       .remove();
 
-    // ENTER: Crea i nuovi assi
     const axisEnter = axis.enter().append("g").attr("class", "axis");
     axisEnter.append("line").style("opacity", 0);
     axisEnter.append("text").style("opacity", 0);
 
-    // UPDATE + ENTER: Anima tutti gli assi (vecchi e nuovi) verso la loro posizione finale
     const axisUpdate = axis.merge(axisEnter);
 
     axisUpdate.select("line")
@@ -114,14 +109,13 @@ export default function RadarChart({ data, features }) {
       .text(d => d)
       .call(wrap, 80);
 
-    // --- MODIFICA ANIMAZIONE 4: Applichiamo il General Update Pattern ai DATI ---
     const radarLine = d3.lineRadial()
       .radius(d => rScale(d.value))
       .angle((_, i) => i * angleSlice)
       .curve(d3.curveLinearClosed);
     
     const nodePaths = gUpdate.selectAll(".radar-path")
-      .data(data, d => d.id); // Traccia i path per ID del nodo
+      .data(data, d => d.id); 
 
     nodePaths.exit()
       .transition().duration(transitionDuration)
@@ -142,7 +136,6 @@ export default function RadarChart({ data, features }) {
           };
         });
         
-        // Applica la transizione all'attributo 'd' del path
         d3.select(this)
           .datum(nodeData)
           .transition().duration(transitionDuration)
@@ -151,7 +144,6 @@ export default function RadarChart({ data, features }) {
           .style("fill", "none")
           .attr("d", radarLine);
 
-        // --- MODIFICA ANIMAZIONE 5: Anche i punti per l'hover devono essere animati ---
         const hoverDots = gUpdate.selectAll(`.hover-dot-group-${node.id.replace(/\s+/g, '-')}`).data([node]);
         const hoverDotsEnter = hoverDots.enter().append("g").attr("class", `hover-dot-group-${node.id.replace(/\s+/g, '-')}`);
         
@@ -179,17 +171,18 @@ export default function RadarChart({ data, features }) {
           .attr("cy", (d, i) => rScale(d.value) * Math.sin(angleSlice * i - Math.PI / 2));
       });
 
-    // La cleanup del tooltip è ora gestita dal .join() sopra, ma la lasciamo per sicurezza
     return () => {
         d3.select(containerRef.current).select(".radarchart-tooltip").remove();
     };
 
   }, [data, features, dimensions]); 
 
-  // Funzione helper wrap (invariata)
   function wrap(text, width) {
     text.each(function() {
-      var text = d3.select(this), words = text.text().split(/\s+/).reverse(), word, line = [], lineNumber = 0, lineHeight = 1.1, y = text.attr("y"), dy = parseFloat(text.attr("dy")), tspan = text.text(null).append("tspan").attr("x", text.attr("x")).attr("y", y).attr("dy", dy + "em");
+      var text = d3.select(this), words = text.text().split(/\s+/).reverse(), word, line = [], lineNumber = 0, lineHeight = 1.1, y = text.attr("y"), 
+      // --- SOLUZIONE 2: Forniamo un valore di fallback (0) se 'dy' non è un numero ---
+      dy = parseFloat(text.attr("dy")) || 0, 
+      tspan = text.text(null).append("tspan").attr("x", text.attr("x")).attr("y", y).attr("dy", dy + "em");
       while (word = words.pop()) {
         line.push(word);
         tspan.text(line.join(" "));
