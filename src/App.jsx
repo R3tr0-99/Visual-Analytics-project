@@ -249,7 +249,7 @@ function App() {
     radviz: <RadvizChart changeType={changeType} data={displayData} features={visibleFeatures} hoveredNodeChanged={hoveredNodeChanged} nodeSelectedChanged={handleNodeSelection} onOrderChange={handleAnchorOrderChange}/>,
     // MODIFICA: Passa a RadarChart il nuovo `anchorOrder`
     radar: <RadarChart data={displayData} features={anchorOrder} type={type} />,
-    stacked: <StackedBarChart data={displayData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} hoveredNode={hoveredNode} onBarClick={handleBarClick} dataTypeId={dataTypeId} showTooltips={showTooltips} />,
+    stacked: <StackedBarChart data={displayData} originalData={slicedData} features={visibleFeatures} selectedNode={selectedNodes.length > 0 ? selectedNodes[0] : null} colorScale={colorScale} hoveredNode={hoveredNode} onBarClick={handleBarClick} dataTypeId={dataTypeId} showTooltips={showTooltips} />,
     pie: (
       <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
         <Legend features={visibleFeatures} colorScale={colorScale} />

@@ -1,7 +1,10 @@
+// --- FILE: stackedBarChart.jsx ---
+
 import React, { useRef, useEffect } from "react";
 import * as d3 from "d3";
 
-export default function StackedBarChart({ data, features, colorScale, margin = { top: 40, right: 30, bottom: 50, left: 50 }, selectedNode, hoveredNode, onBarClick, dataTypeId, showTooltips = true }) {
+// 1. Aggiungi 'originalData' all'elenco delle props
+export default function StackedBarChart({ data, originalData, features, colorScale, margin = { top: 40, right: 30, bottom: 50, left: 50 }, selectedNode, hoveredNode, onBarClick, dataTypeId, showTooltips = true }) {
   const svgRef = useRef(null);
   const containerRef = useRef(null);
 
@@ -12,7 +15,10 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
         return;
     }
 
-    const originalDataByName = new Map(data.map(d => [d.name, d]));
+    // 2. Usa la nuova prop 'originalData' per creare la mappa di ricerca.
+    //    Usiamo 'data' (displayData) come fallback se originalData non fosse passato.
+    const dataForLookup = originalData || data;
+    const originalDataByName = new Map(dataForLookup.map(d => [d.name, d]));
 
     const processedData = data.map(d => {
       // If data is already in [0,1] domain, use original values for proportions
@@ -103,6 +109,7 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
           const segmentValue = d[1] - d[0];
           const percentage = (segmentValue * 100).toFixed(1);
           const feature = d3.select(this.parentNode).datum().key;
+          // ORA 'raw' PRENDERÀ IL VALORE CORRETTO DALLA MAPPA CREATA CON I DATI ORIGINALI
           const raw = originalDataByName.get(d.data.name)?.[feature];
           const displayValue = (typeof raw === 'number' && isFinite(raw)) ? raw.toLocaleString() : segmentValue.toFixed(3);
           tooltip.transition().duration(200).style("opacity", 1);
@@ -145,7 +152,7 @@ export default function StackedBarChart({ data, features, colorScale, margin = {
     totalLegendWidth -= legendPadding;
     if (totalLegendWidth > width) { const scaleFactor = width / totalLegendWidth; legendGroup.attr("font-size", 10 * scaleFactor); let newCurrentX = 0; legendItems.each(function() { const itemWidth = this.getBBox().width; d3.select(this).attr("transform", `translate(${newCurrentX}, 0)`); newCurrentX += itemWidth + legendPadding; }); }
 
-  }, [data, features, selectedNode, hoveredNode, colorScale, margin, onBarClick, dataTypeId, showTooltips]);
+  }, [data, originalData, features, selectedNode, hoveredNode, colorScale, margin, onBarClick, dataTypeId, showTooltips]); // Aggiungi 'originalData' all'array di dipendenze
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%' }}>
